@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from src.application.cazar_remates_service import CazarRematesService
 from src.application.export_service import ExportService
 from src.application.georreferenciar_service import GeorreferenciarService
+from src.application.gap_analysis_service import GapAnalysisService
 from src.infrastructure.sqlite_repository import SqliteRemateRepository
 from src.infrastructure.catastro_zarcero_client import CatastroZarceroClient
 
@@ -133,6 +134,39 @@ def comando_georreferenciar(args):
         print("     (Podes abrirla directamente en QGIS, ArcGIS o en cualquier visor Leaflet).")
 
 
+def comando_detectar_vacios(args):
+    service = GapAnalysisService()
+    distrito = args.distrito
+    area_min = args.area_min
+
+    print(f"\n[GAP-ANALYSIS] Iniciando deteccion de vacios catastrales en Distrito: {distrito}...")
+    print(f"               Umbral de area minima: >= {area_min} m2")
+
+    resultado = service.ejecutar_analisis_distrito(
+        distrito=distrito, area_minima_m2=area_min, limite_predios=args.limite_predios
+    )
+
+    if not resultado:
+        print(f"[ERROR] No se pudo obtener el limite territorial o los predios para {distrito}.")
+        return
+
+    print("\n[RESULTADO] Analisis Espacial:")
+    print(f"   - Area Total Distrito:       {resultado.area_distrito_m2:,.2f} m2")
+    print(f"   - Area Registrada Predios:   {resultado.area_inscrita_m2:,.2f} m2")
+    print(f"   - Porcentaje Catastrado:     {resultado.porcentaje_catastrado}%")
+    print(f"   - Vacios Topologicos:        {resultado.total_vacios_detectados} detectados")
+
+    if resultado.vacios:
+        print("\nTop 5 Vacios con Mayor Potencial (Eslabones Perdidos):")
+        for i, v in enumerate(sorted(resultado.vacios, key=lambda x: x.area_estimada_m2, reverse=True)[:5], 1):
+            colindantes_str = ", ".join(v.fincas_colindantes[:4]) if v.fincas_colindantes else "Sin datos"
+            print(f"   {i}. ID: {v.id_vacio} | Area: {v.area_estimada_m2:,.2f} m2 | Centroide: ({v.centroide_x}, {v.centroide_y}) | Colinda con fincas: {colindantes_str}")
+
+        salida = args.salida or f"data/vacios_{distrito.lower().replace(' ', '_')}.geojson"
+        ruta = service.exportar_vacios_geojson(resultado, salida)
+        print(f"\n[OK] Capa de vacios exportada a: {ruta}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="buscaCatastro - Plataforma de Inteligencia Inmobiliaria y Catastro (Costa Rica)"
@@ -171,6 +205,14 @@ def main():
     parser_geo.add_argument("--canton", type=str, default="Zarcero", help="Canton a procesar")
     parser_geo.add_argument("--salida", type=str, help="Ruta de salida del GeoJSON")
     parser_geo.set_defaults(func=comando_georreferenciar)
+
+    # Subcomando: detectar-vacios
+    parser_vacios = subparsers.add_parser("detectar-vacios", help="Ejecuta el Gap Analysis para cazar eslabones perdidos")
+    parser_vacios.add_argument("--distrito", type=str, default="Guadalupe", help="Distrito a analizar (default: Guadalupe)")
+    parser_vacios.add_argument("--area-min", type=float, default=500.0, help="Area minima en m2 para filtrar astillas (default: 500)")
+    parser_vacios.add_argument("--limite-predios", type=int, default=200, help="Cantidad de predios a procesar")
+    parser_vacios.add_argument("--salida", type=str, help="Ruta del GeoJSON de salida")
+    parser_vacios.set_defaults(func=comando_detectar_vacios)
 
     args = parser.parse_args()
     args.func(args)

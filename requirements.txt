@@ -6,6 +6,9 @@ lxml>=5.1.0
 # Data modeling & validation
 pydantic>=2.7.0
 
+# GIS & Spatial Operations
+shapely>=2.0.0
+
 # API (Next step)
 fastapi>=0.110.0
 uvicorn>=0.29.0
