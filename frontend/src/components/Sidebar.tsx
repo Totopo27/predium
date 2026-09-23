@@ -40,12 +40,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <h1 className="font-extrabold text-base tracking-tight bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
               Predium
             </h1>
-            <p className="text-[11px] text-slate-400 font-medium">Inteligencia Patrimonial · Costa Rica</p>
+            <p className="text-[11px] text-slate-400 font-medium flex items-center space-x-1">
+              <MapPin className="w-3 h-3 text-slate-500" />
+              <span>Zarcero, Alajuela</span>
+            </p>
           </div>
         </div>
-        <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold rounded-full border border-emerald-500/20">
-          Zarcero Piloto
-        </span>
       </div>
 
       {/* Buscador Catastral WFS */}
