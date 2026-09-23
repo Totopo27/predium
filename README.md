@@ -44,6 +44,11 @@ Sistema especializado en detectar, georreferenciar y sanear propiedades en estad
    - Detección de morosidad fiscal/municipal (*nicho de oro*).
    - Evaluación de riesgo de gravámenes complejos (usufructo, demandas, concesiones de agua) y nivel de urgencia de la subasta (1°, 2° o 3° remate).
 
+7. **Módulo 7: Orquestador y Worker de Ingesta Autónoma (`src/application/orchestrator_service.py` & `src/infrastructure/scheduler.py`)**
+   - Pipeline de sincronización autónoma continua con disparador de alertas de negocio.
+   - Función de *Catch-up* retrospectivo automático para cubrir fines de semana o cortes de red sin dejar días desatendidos.
+   - Alertas críticas automáticas para remates municipales y terceras subastas.
+
 ---
 
 ## 🚀 Guía Rápida de Comandos CLI
@@ -59,40 +64,34 @@ python main.py visor
 ```
 > Abre automáticamente `http://127.0.0.1:8000` con el mapa satelital interactivo.
 
-### 2. Triage de Edictos con Modelo de Sistema 1 (Laya)
+### 2. Iniciar el Worker de Sincronización Automática
+```powershell
+# Ejecución continua cada 6 horas:
+python main.py worker --intervalo 6 --canton Zarcero
+
+# Sincronización inmediata de hoy:
+python main.py worker --ejecutar-ahora --canton Zarcero
+
+# Barrido retrospectivo (catch-up) de los últimos 5 días hábiles:
+python main.py worker --catchup 5 --canton Zarcero
+```
+
+### 3. Triage de Edictos con Modelo de Sistema 1 (Laya)
 ```powershell
 python main.py triage --texto "En este Despacho saquese a remate la finca matricula 2-123456-000 en cobro de Municipalidad de Zarcero por impuestos territoriales, soportando usufructo vitalicio."
 ```
 
-### 3. Escanear Remates en el Boletín Judicial
-```powershell
-# Escanear los últimos 7 días en Zarcero (con triage automático):
-python main.py escanear --canton Zarcero --dias 7
-
-# Escanear una fecha específica:
-python main.py escanear --canton Zarcero --fecha 2023-08-21
-```
-
-### 4. Listar y Exportar Oportunidades Guardadas
-```powershell
-# Listar remates almacenados en la base de datos:
-python main.py listar --canton Zarcero
-
-# Exportar a CSV para Excel:
-python main.py exportar --canton Zarcero --formato csv --salida data/remates_zarcero.csv
-```
-
-### 5. Consultar un Predio Directo en el Catastro
+### 4. Consultar un Predio Directo en el Catastro
 ```powershell
 python main.py buscar-predio --finca 214978
 ```
 
-### 6. Detectar Vacíos Catastrales (Eslabones Perdidos)
+### 5. Detectar Vacíos Catastrales (Eslabones Perdidos)
 ```powershell
 python main.py detectar-vacios --distrito Guadalupe --area-min 500
 ```
 
-### 7. Diagnóstico Legal de un Folio Real
+### 6. Diagnóstico Legal de un Folio Real
 ```powershell
 python main.py diagnosticar --folio 2-120500-000 --escenario sociedad_disuelta
 ```
@@ -106,4 +105,4 @@ El proyecto cuenta con una suite completa de pruebas unitarias y de integración
 ```powershell
 pytest -v
 ```
-*(23 pruebas unitarias pasando al 100%)*
+*(24 pruebas unitarias pasando al 100%)*
