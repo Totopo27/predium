@@ -5,8 +5,11 @@ from src.application.cazar_remates_service import CazarRematesService
 from src.application.export_service import ExportService
 from src.application.georreferenciar_service import GeorreferenciarService
 from src.application.gap_analysis_service import GapAnalysisService
+from src.application.diagnostico_patrimonial_service import DiagnosticoPatrimonialService
 from src.infrastructure.sqlite_repository import SqliteRemateRepository
 from src.infrastructure.catastro_zarcero_client import CatastroZarceroClient
+from src.infrastructure.registro_nacional_client import RegistroNacionalClient
+from src.domain.registro_models import TitularFinca, TipoPersona, Gravamen, GravamenTipo, EstadoSociedad
 
 # Asegurar UTF-8 en salida estándar para consolas de Windows
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -167,6 +170,69 @@ def comando_detectar_vacios(args):
         print(f"\n[OK] Capa de vacios exportada a: {ruta}")
 
 
+def comando_diagnosticar(args):
+    folio = args.folio
+    print(f"\n[RNP] Ejecutando diagnostico patrimonial para Folio Real: {folio}...")
+
+    client = RegistroNacionalClient()
+
+    # Si se pasa flag de simulación para verificar escenarios
+    titular = None
+    estado_soc = EstadoSociedad.NO_APLICA
+    gravamenes = []
+
+    if args.escenario == "sociedad_disuelta":
+        titular = TitularFinca(
+            nombre="Desarrollos del Norte S.A.",
+            cedula="3-101-445566",
+            tipo=TipoPersona.JURIDICA,
+        )
+        estado_soc = EstadoSociedad.DISUELTA_POR_LEY_9428
+    elif args.escenario == "usufructo":
+        titular = TitularFinca(
+            nombre="Don Jorge V. (Adulto Mayor)",
+            cedula="2-0111-0222",
+            tipo=TipoPersona.FISICA,
+        )
+        gravamenes.append(
+            Gravamen(
+                tipo=GravamenTipo.USUFRUCTO,
+                descripcion="Usufructo vitalicio a favor de Don Jorge",
+            )
+        )
+    elif args.escenario == "remate":
+        titular = TitularFinca(
+            nombre="Inversiones Alfa",
+            cedula="3-101-778899",
+            tipo=TipoPersona.JURIDICA,
+        )
+        gravamenes.append(
+            Gravamen(
+                tipo=GravamenTipo.EMBARGO,
+                descripcion="Embargo judicial cobratorio",
+                monto=25000000.0,
+            )
+        )
+
+    diag = client.obtener_estudio_finca(
+        folio_real=folio,
+        titular_simulado=titular,
+        gravamenes_simulados=gravamenes,
+        estado_sociedad=estado_soc,
+    )
+
+    print("\n--- INFORME DE DIAGNOSTICO JURIDICO ---")
+    print(f"Folio Real:               {diag.folio_real}")
+    print(f"Titular:                  {diag.titulares[0].nombre} ({diag.titulares[0].cedula})")
+    print(f"Tipo Titular:             {diag.titulares[0].tipo.value}")
+    print(f"Alerta Sociedad Disuelta: {'SI (Ley 9428)' if diag.alerta_sociedad_disuelta else 'NO'}")
+    print(f"Alerta Usufructo Activo:  {'SI' if diag.alerta_usufructo_activo else 'NO'}")
+    print(f"Alerta Embargos:          {'SI' if diag.alerta_embargos_judiciales else 'NO'}")
+    print(f"\nEstrategia Sugerida:      *** {diag.estrategia_sugerida.value} ***")
+    print(f"Dictamen Tecnico:         {diag.diagnostico_resumen}")
+    print("-" * 50)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="buscaCatastro - Plataforma de Inteligencia Inmobiliaria y Catastro (Costa Rica)"
@@ -213,6 +279,18 @@ def main():
     parser_vacios.add_argument("--limite-predios", type=int, default=200, help="Cantidad de predios a procesar")
     parser_vacios.add_argument("--salida", type=str, help="Ruta del GeoJSON de salida")
     parser_vacios.set_defaults(func=comando_detectar_vacios)
+
+    # Subcomando: diagnosticar
+    parser_diag = subparsers.add_parser("diagnosticar", help="Diagnostico legal-patrimonial de un Folio Real")
+    parser_diag.add_argument("--folio", type=str, required=True, help="Folio Real (ej: 2-120500-000)")
+    parser_diag.add_argument(
+        "--escenario",
+        type=str,
+        default="sociedad_disuelta",
+        choices=["sociedad_disuelta", "usufructo", "remate", "regular"],
+        help="Escenario de prueba para evaluar estrategia",
+    )
+    parser_diag.set_defaults(func=comando_diagnosticar)
 
     args = parser.parse_args()
     args.func(args)
