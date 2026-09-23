@@ -26,6 +26,7 @@ class GapDetector:
         vias_publicas: Optional[List[Any]] = None,
         cuerpos_agua: Optional[List[Any]] = None,
         area_minima_m2: float = 300.0,
+        area_maxima_m2: float = 80000.0,
     ) -> ResultadoGapAnalysis:
         """
         Ejecuta el análisis espacial completo sobre un distrito:
@@ -87,15 +88,21 @@ class GapDetector:
             poly_limpio = poly.buffer(-0.5).buffer(0.5)
             area = float(poly_limpio.area)
 
-            if area >= area_minima_m2:
+            if area_minima_m2 <= area <= area_maxima_m2:
                 centroide = poly_limpio.centroid
                 
                 # Identificar fincas que colindan con este vacío
                 colindantes: List[str] = []
+                geometrias_colindantes: List[Dict[str, Any]] = []
                 for finca_id, g_predio in sh_predios:
-                    # Si tocan o intersecan el borde del vacío
-                    if poly_limpio.distance(g_predio) < 1.0:
+                    # Si tocan o intersecan el borde del vacío a menos de 2 metros
+                    if poly_limpio.distance(g_predio) < 2.0:
                         colindantes.append(finca_id)
+                        geometrias_colindantes.append({
+                            "finca": finca_id,
+                            "area_m2": round(float(g_predio.area), 2),
+                            "geometry": mapping(g_predio),
+                        })
 
                 vacio_obj = VacioCatastral(
                     id_vacio=f"VACIO-{distrito_nombre.upper().replace(' ', '_')}-{contador:03d}",
@@ -105,6 +112,7 @@ class GapDetector:
                     centroide_x=round(float(centroide.x), 2),
                     centroide_y=round(float(centroide.y), 2),
                     fincas_colindantes=colindantes,
+                    geometrias_colindantes=geometrias_colindantes,
                     geometria=mapping(poly_limpio),
                 )
                 vacios_detectados.append(vacio_obj)

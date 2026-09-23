@@ -1,11 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import { Compass } from 'lucide-react';
+import { reproyectarGeoJson } from '../lib/geo';
 
 interface MapProps {
   rematesGeoJson: any;
   vaciosGeoJson: any;
   predioBuscadoGeoJson: any;
+  selectedFeature: any;
   onSelectFeature: (feature: any) => void;
   tipoMapa: 'satelite' | 'calles';
   onSetTipoMapa: (tipo: 'satelite' | 'calles') => void;
@@ -15,15 +17,16 @@ export const MapView: React.FC<MapProps> = ({
   rematesGeoJson,
   vaciosGeoJson,
   predioBuscadoGeoJson,
+  selectedFeature,
   onSelectFeature,
   tipoMapa,
   onSetTipoMapa,
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
 
-  // Función segura para volar a coordenadas válidas de Costa Rica
-  const centrarEnCoords = (coordsGeoJson: any) => {
+  const centrarEnCoords = (coordsGeoJson: any, maxZoomNivel: number = 17) => {
     const map = mapRef.current;
     if (!map || !coordsGeoJson) return;
 
@@ -34,7 +37,6 @@ export const MapView: React.FC<MapProps> = ({
       if (typeof c[0] === 'number') {
         const lon = c[0];
         const lat = c[1];
-        // Rango geográfico estricto de Costa Rica en WGS84
         if (lon >= -87.0 && lon <= -82.0 && lat >= 7.5 && lat <= 12.0) {
           bounds.extend([lon, lat]);
           puntosValidos++;
@@ -47,11 +49,10 @@ export const MapView: React.FC<MapProps> = ({
     recorrer(coordsGeoJson);
 
     if (puntosValidos > 0 && !bounds.isEmpty()) {
-      map.fitBounds(bounds, { padding: 90, maxZoom: 17, duration: 1200 });
+      map.fitBounds(bounds, { padding: 80, maxZoom: maxZoomNivel, duration: 1200 });
     }
   };
 
-  // Función para alternar capas base de satélite y calles
   const cambiarCapaBase = (tipo: 'satelite' | 'calles') => {
     const map = mapRef.current;
     if (!map) return;
@@ -136,7 +137,7 @@ export const MapView: React.FC<MapProps> = ({
         source: 'vacios-source',
         paint: {
           'fill-color': '#f59e0b',
-          'fill-opacity': 0.5,
+          'fill-opacity': 0.4,
         },
       });
 
@@ -146,7 +147,7 @@ export const MapView: React.FC<MapProps> = ({
         source: 'vacios-source',
         paint: {
           'line-color': '#fbbf24',
-          'line-width': 2.5,
+          'line-width': 2,
         },
       });
 
@@ -162,7 +163,7 @@ export const MapView: React.FC<MapProps> = ({
         source: 'remates-source',
         paint: {
           'fill-color': '#f43f5e',
-          'fill-opacity': 0.45,
+          'fill-opacity': 0.4,
         },
       });
 
@@ -202,7 +203,72 @@ export const MapView: React.FC<MapProps> = ({
         },
       });
 
-      ['remates-fill', 'vacios-fill', 'predio-buscado-fill'].forEach((layerId) => {
+      // 4. Capa de Fincas Vecinas Colindantes (Marco de referencia en Azul Cian)
+      map.addSource('colindantes-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+
+      map.addLayer({
+        id: 'colindantes-fill',
+        type: 'fill',
+        source: 'colindantes-source',
+        paint: {
+          'fill-color': '#06b6d4',
+          'fill-opacity': 0.28,
+        },
+      });
+
+      map.addLayer({
+        id: 'colindantes-line',
+        type: 'line',
+        source: 'colindantes-source',
+        paint: {
+          'line-color': '#22d3ee',
+          'line-width': 2.5,
+        },
+      });
+
+      // 5. Capa de RESALTE ACTIVO (Elemento Seleccionado con Halo Neón y Borde Grueso)
+      map.addSource('selected-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+
+      map.addLayer({
+        id: 'selected-halo',
+        type: 'line',
+        source: 'selected-source',
+        paint: {
+          'line-color': '#fde047',
+          'line-width': 10,
+          'line-opacity': 0.6,
+          'line-blur': 4,
+        },
+      });
+
+      map.addLayer({
+        id: 'selected-line',
+        type: 'line',
+        source: 'selected-source',
+        paint: {
+          'line-color': '#ffffff',
+          'line-width': 4,
+          'line-dasharray': [3, 1.5],
+        },
+      });
+
+      map.addLayer({
+        id: 'selected-fill',
+        type: 'fill',
+        source: 'selected-source',
+        paint: {
+          'fill-color': '#f59e0b',
+          'fill-opacity': 0.6,
+        },
+      });
+
+      ['remates-fill', 'vacios-fill', 'predio-buscado-fill', 'colindantes-fill'].forEach((layerId) => {
         map.on('click', layerId, (e: any) => {
           if (e.features && e.features.length > 0) {
             onSelectFeature(e.features[0]);
@@ -225,12 +291,10 @@ export const MapView: React.FC<MapProps> = ({
     };
   }, []);
 
-  // Observador de tipoMapa con aplicación inmediata
   useEffect(() => {
     cambiarCapaBase(tipoMapa);
   }, [tipoMapa]);
 
-  // Actualizar datos de remates
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -242,7 +306,6 @@ export const MapView: React.FC<MapProps> = ({
     } catch (e) {}
   }, [rematesGeoJson]);
 
-  // Actualizar datos de vacíos y volar automáticamente
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -250,15 +313,96 @@ export const MapView: React.FC<MapProps> = ({
       const src = map.getSource('vacios-source') as maplibregl.GeoJSONSource;
       if (src && vaciosGeoJson) {
         src.setData(vaciosGeoJson);
-        const features = vaciosGeoJson.features;
-        if (features && features.length > 0 && features[0].geometry) {
-          centrarEnCoords(features[0].geometry.coordinates);
-        }
       }
     } catch (e) {}
   }, [vaciosGeoJson]);
 
-  // Actualizar y volar al predio buscado / seleccionado
+  // Resaltar activamente la Feature seleccionada + renderizar marco de vecinos colindantes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    try {
+      const srcSelected = map.getSource('selected-source') as maplibregl.GeoJSONSource;
+      const srcColindantes = map.getSource('colindantes-source') as maplibregl.GeoJSONSource;
+
+      if (srcSelected) {
+        if (selectedFeature && selectedFeature.geometry) {
+          srcSelected.setData({
+            type: 'FeatureCollection',
+            features: [selectedFeature],
+          });
+
+          // Si el vacío trae sus fincas vecinas colindantes, cargarlas en azul
+          const props = selectedFeature.properties || {};
+          const colindantesGeoms = props.colindantes_geometrias;
+
+          if (srcColindantes) {
+            if (Array.isArray(colindantesGeoms) && colindantesGeoms.length > 0) {
+              const featuresVecinos = colindantesGeoms.map((cg: any) => ({
+                type: 'Feature',
+                properties: {
+                  tipo: 'PREDIO_COLINDANTE',
+                  finca: cg.finca,
+                  area_m2: cg.area_m2,
+                },
+                geometry: cg.geometry,
+              }));
+
+              const colindantesReproyectados = reproyectarGeoJson({
+                type: 'FeatureCollection',
+                features: featuresVecinos,
+              });
+
+              srcColindantes.setData(colindantesReproyectados);
+            } else {
+              srcColindantes.setData({ type: 'FeatureCollection', features: [] });
+            }
+          }
+
+          // Centrar con zoom ajustado
+          const coords = selectedFeature.geometry.coordinates;
+          if (coords) {
+            centrarEnCoords(coords, 16);
+          }
+
+          // Popup indicador sobre el polígono
+          if (popupRef.current) popupRef.current.remove();
+
+          const titulo = props.id_vacio || (props.folio_real ? `Remate ${props.folio_real}` : `Finca ${props.finca || ''}`);
+          const subtitulo = props.area_m2 ? `${Number(props.area_m2).toLocaleString()} m²` : props.monto_base || '';
+
+          let centroLngLat: [number, number] = [-84.394, 10.188];
+          const primerPunto = (c: any) => {
+            if (typeof c[0] === 'number') {
+              centroLngLat = [c[0], c[1]];
+            } else if (Array.isArray(c) && c.length > 0) {
+              primerPunto(c[0]);
+            }
+          };
+          primerPunto(coords);
+
+          popupRef.current = new maplibregl.Popup({ closeButton: false, offset: 15 })
+            .setLngLat(centroLngLat)
+            .setHTML(`
+              <div style="color: #020617; font-family: sans-serif; font-size: 11px; padding: 2px;">
+                <strong style="display: block; color: #b45309;">${titulo}</strong>
+                <span>${subtitulo}</span>
+              </div>
+            `)
+            .addTo(map);
+        } else {
+          srcSelected.setData({ type: 'FeatureCollection', features: [] });
+          if (srcColindantes) srcColindantes.setData({ type: 'FeatureCollection', features: [] });
+          if (popupRef.current) popupRef.current.remove();
+        }
+      }
+    } catch (e) {
+      console.warn('Error resaltando feature:', e);
+    }
+  }, [selectedFeature]);
+
+  // Buscar predio individual
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -268,7 +412,7 @@ export const MapView: React.FC<MapProps> = ({
         src.setData(predioBuscadoGeoJson);
         const coords = predioBuscadoGeoJson.geometry?.coordinates;
         if (coords) {
-          centrarEnCoords(coords);
+          centrarEnCoords(coords, 18);
         }
       }
     } catch (e) {}
@@ -278,9 +422,8 @@ export const MapView: React.FC<MapProps> = ({
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
 
-      {/* Controles flotantes de capas y perspectiva */}
+      {/* Controles flotantes superiores */}
       <div className="absolute top-5 left-5 z-10 flex space-x-2">
-        {/* Toggle Satélite | Calles con acción directa */}
         <div className="flex bg-slate-900/90 rounded-xl border border-slate-700/80 p-0.5 shadow-xl backdrop-blur-md">
           <button
             onClick={() => {
@@ -310,7 +453,6 @@ export const MapView: React.FC<MapProps> = ({
           </button>
         </div>
 
-        {/* Botón de alternar inclinación 2.5D */}
         <button
           onClick={() => {
             const map = mapRef.current;

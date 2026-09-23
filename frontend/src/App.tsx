@@ -5,6 +5,11 @@ import { PropertyDetail } from './components/PropertyDetail';
 import type { Remate } from './types';
 import { reproyectarGeoJson } from './lib/geo';
 
+interface Notificacion {
+  tipo: 'info' | 'success' | 'warning';
+  mensaje: string;
+}
+
 export const App: React.FC = () => {
   const [remates, setRemates] = useState<Remate[]>([]);
   const [rematesGeoJson, setRematesGeoJson] = useState<any>(null);
@@ -14,14 +19,20 @@ export const App: React.FC = () => {
   const [tipoMapa, setTipoMapa] = useState<'satelite' | 'calles'>('satelite');
   const [cargandoVacios, setCargandoVacios] = useState(false);
   const [cargandoRemates, setCargandoRemates] = useState(false);
+  const [notificacion, setNotificacion] = useState<Notificacion | null>(null);
+
+  const mostrarNotificacion = (tipo: 'info' | 'success' | 'warning', mensaje: string) => {
+    setNotificacion({ tipo, mensaje });
+    setTimeout(() => {
+      setNotificacion(null);
+    }, 5000);
+  };
 
   const cargarRemates = () => {
-    setCargandoRemates(true);
     fetch('/api/remates?canton=Zarcero')
       .then((res) => res.json())
       .then((data) => setRemates(data))
-      .catch((err) => console.error('Error al cargar remates:', err))
-      .finally(() => setCargandoRemates(false));
+      .catch((err) => console.error('Error al cargar remates:', err));
 
     fetch('/api/remates/geojson?canton=Zarcero')
       .then((res) => res.json())
@@ -30,6 +41,35 @@ export const App: React.FC = () => {
         setRematesGeoJson(reproyectado);
       })
       .catch((err) => console.error('Error al cargar capa de remates:', err));
+  };
+
+  const handleEscanearBoletin = async () => {
+    setCargandoRemates(true);
+    try {
+      const res = await fetch('/api/remates/escanear?canton=Zarcero&dias=5', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      cargarRemates();
+
+      if (data.nuevos_guardados > 0) {
+        mostrarNotificacion(
+          'success',
+          `Escaneo completado: ¡Se ingresaron ${data.nuevos_guardados} nuevos remates a la base de datos!`
+        );
+      } else {
+        mostrarNotificacion(
+          'info',
+          `Boletín analizado (${data.dias_escaneados || 5} días): No hay nuevos remates para Zarcero. Base de datos al día.`
+        );
+      }
+    } catch (err) {
+      console.error('Error al escanear boletín:', err);
+      mostrarNotificacion('warning', 'Error al conectar con el servidor para escanear el Boletín.');
+      cargarRemates();
+    } finally {
+      setCargandoRemates(false);
+    }
   };
 
   useEffect(() => {
@@ -48,12 +88,14 @@ export const App: React.FC = () => {
             detalles: 'Este inmueble no tiene plano digitalizado en el catastro municipal actual o es una finca antigua.',
           },
         });
+        mostrarNotificacion('info', `Finca ${fincaOPlano}: No localizada en el mosaico catastral digital.`);
         return;
       }
       const data = await res.json();
       const reproyectado = reproyectarGeoJson(data);
       setPredioBuscadoGeoJson(reproyectado);
       setSelectedFeature(reproyectado);
+      mostrarNotificacion('success', `Predio ${fincaOPlano} localizado en catastro oficial.`);
     } catch (err) {
       console.error('Error al consultar catastro:', err);
     }
@@ -62,17 +104,26 @@ export const App: React.FC = () => {
   const handleEjecutarGapAnalysis = async () => {
     setCargandoVacios(true);
     try {
-      const res = await fetch('/api/vacios/geojson?distrito=Guadalupe&area_min=400&limite_predios=80');
+      const res = await fetch('/api/vacios/geojson?distrito=Guadalupe&area_min=300&limite_predios=150');
       const data = await res.json();
       const reproyectado = reproyectarGeoJson(data);
       setVaciosGeoJson(reproyectado);
-      if (reproyectado?.features && reproyectado.features.length > 0) {
+      const total = reproyectado?.features?.length || 0;
+
+      if (total > 0) {
         const primerVacio = reproyectado.features[0];
         setSelectedFeature(primerVacio);
         setPredioBuscadoGeoJson(primerVacio);
+        mostrarNotificacion(
+          'success',
+          `Detección completada: ${total} vacíos catastrales detectados en Guadalupe.`
+        );
+      } else {
+        mostrarNotificacion('info', 'No se detectaron vacíos territoriales en el área analizada.');
       }
     } catch (err) {
       console.error('Error al ejecutar Gap Analysis:', err);
+      mostrarNotificacion('warning', 'Error al ejecutar el análisis de vacíos topológicos.');
     } finally {
       setCargandoVacios(false);
     }
@@ -113,11 +164,29 @@ export const App: React.FC = () => {
   };
 
   const handleCentrarEnMapa = (feature: any) => {
-    setPredioBuscadoGeoJson({ ...feature });
+    setSelectedFeature(feature);
+    setPredioBuscadoGeoJson(feature);
   };
 
   return (
-    <div className="flex w-screen h-screen overflow-hidden bg-slate-950 font-sans">
+    <div className="flex w-screen h-screen overflow-hidden bg-slate-950 font-sans relative">
+      {/* Toast Flotante de Notificaciones */}
+      {notificacion && (
+        <div
+          className={`absolute top-5 left-1/2 -translate-x-1/2 z-30 px-4 py-2.5 rounded-xl border shadow-2xl backdrop-blur-md text-xs font-semibold flex items-center space-x-2 transition-all duration-300 animate-in fade-in slide-in-from-top-2 ${
+            notificacion.tipo === 'success'
+              ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/40 shadow-emerald-500/10'
+              : notificacion.tipo === 'warning'
+              ? 'bg-rose-950/90 text-rose-300 border-rose-500/40 shadow-rose-500/10'
+              : 'bg-slate-900/95 text-cyan-300 border-cyan-500/40 shadow-cyan-500/10'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-current shrink-0"></span>
+          <span>{notificacion.mensaje}</span>
+        </div>
+      )}
+
+      {/* Barra lateral */}
       <Sidebar
         remates={remates}
         vaciosFeatures={vaciosGeoJson?.features || []}
@@ -125,17 +194,19 @@ export const App: React.FC = () => {
         onSelectVacio={handleSelectVacio}
         onBuscarFinca={handleBuscarFinca}
         onEjecutarGapAnalysis={handleEjecutarGapAnalysis}
-        onEscanearBoletin={cargarRemates}
+        onEscanearBoletin={handleEscanearBoletin}
         cargandoRemates={cargandoRemates}
         cargandoVacios={cargandoVacios}
         totalVacios={vaciosGeoJson?.features?.length || 0}
       />
 
+      {/* Mapa interactivo MapLibre */}
       <main className="flex-1 relative h-full">
         <MapView
           rematesGeoJson={rematesGeoJson}
           vaciosGeoJson={vaciosGeoJson}
           predioBuscadoGeoJson={predioBuscadoGeoJson}
+          selectedFeature={selectedFeature}
           onSelectFeature={(feat) => setSelectedFeature(feat)}
           tipoMapa={tipoMapa}
           onSetTipoMapa={(nuevoTipo) => setTipoMapa(nuevoTipo)}

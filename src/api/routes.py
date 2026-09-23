@@ -1,10 +1,12 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, List, Dict, Any
+from datetime import date, datetime, timedelta
 from src.infrastructure.sqlite_repository import SqliteRemateRepository
 from src.infrastructure.catastro_zarcero_client import CatastroZarceroClient
 from src.infrastructure.registro_nacional_client import RegistroNacionalClient
 from src.application.georreferenciar_service import GeorreferenciarService
 from src.application.gap_analysis_service import GapAnalysisService
+from src.application.orchestrator_service import OrchestratorService
 from src.domain.registro_models import TitularFinca, TipoPersona, Gravamen, GravamenTipo, EstadoSociedad
 
 api_router = APIRouter(prefix="/api")
@@ -33,16 +35,72 @@ def listar_remates(
             "monto_segundo": r.base.monto_segundo_remate,
             "monto_tercero": r.base.monto_tercer_remate,
             "fecha_publicacion": r.fecha_publicacion.isoformat() if r.fecha_publicacion else None,
+            "tipo_bien": r.tipo_bien,
+            "origen_deuda": r.origen_deuda,
+            "es_morosidad_municipal": r.es_morosidad_municipal,
+            "urgencia": r.urgencia,
         }
         for r in remates
     ]
+
+
+@api_router.post("/remates/escanear")
+def escanear_boletin(
+    canton: str = Query("Zarcero", description="Cantón objetivo para el escaneo"),
+    dias: int = Query(5, description="Cantidad de días hábiles hacia atrás"),
+    fecha: Optional[str] = Query(None, description="Fecha específica en formato YYYY-MM-DD"),
+):
+    """
+    Ejecuta el escaneo del Boletín Judicial bajo demanda:
+    Descarga publicaciones oficiales, aplica triage de Sistema 1 con Laya,
+    deduplica en SQLite y georreferencia en Catastro WFS.
+    """
+    orchestrator = OrchestratorService()
+
+    if fecha:
+        try:
+            fecha_obj = datetime.strptime(fecha, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
+
+        log = orchestrator.ejecutar_ciclo_fecha(fecha=fecha_obj, canton=canton)
+        return {
+            "status": "ok",
+            "canton": canton,
+            "fecha_consultada": fecha,
+            "total_analizados": log.total_bloques_analizados,
+            "inmuebles_detectados": log.inmuebles_detectados,
+            "nuevos_guardados": log.nuevos_guardados_bd,
+            "georreferenciados": log.georreferenciados_catastro,
+            "alertas_emitidas": log.alertas_emitidas,
+            "alertas": [a.model_dump() for a in log.alertas],
+            "mensaje": f"Escaneo finalizado para {fecha}. Nuevos remates ingresados: {log.nuevos_guardados_bd}.",
+        }
+
+    # Escaneo de rango retrospectivo
+    logs = orchestrator.ejecutar_catchup(dias_atras=dias, canton=canton)
+    total_nuevos = sum(l.nuevos_guardados_bd for l in logs)
+    total_alertas = sum(l.alertas_emitidas for l in logs)
+    todas_alertas = []
+    for l in logs:
+        todas_alertas.extend([a.model_dump() for a in l.alertas])
+
+    return {
+        "status": "ok",
+        "canton": canton,
+        "dias_escaneados": dias,
+        "nuevos_guardados": total_nuevos,
+        "alertas_emitidas": total_alertas,
+        "alertas": todas_alertas,
+        "mensaje": f"Escaneo de {dias} días completado. Nuevos remates ingresados: {total_nuevos}.",
+    }
 
 
 @api_router.get("/remates/geojson")
 def remates_geojson(canton: Optional[str] = "Zarcero"):
     service = GeorreferenciarService()
     resultados = service.georreferenciar_todos_en_bd(canton=canton)
-    
+
     features = []
     for item in resultados:
         if item.georreferenciado and item.predio:
@@ -130,6 +188,7 @@ def vacios_geojson(
                 "area_m2": v.area_estimada_m2,
                 "perimetro_m": v.perimetro_m,
                 "colindantes": ", ".join(v.fincas_colindantes[:5]),
+                "colindantes_geometrias": v.geometrias_colindantes[:8],
             },
             "geometry": v.geometria,
         })

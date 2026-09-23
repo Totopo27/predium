@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 
 class VacioCatastral(BaseModel):
-    """Representa una porción territorial sin registro catastral detectada (eslabón perdido)."""
+    """Representa una porción territorial sin registro catastral detectada (vacío catastral)."""
     id_vacio: str = Field(..., description="Identificador único del vacío detectado")
     distrito: str = Field(..., description="Distrito al que pertenece")
     area_estimada_m2: float = Field(..., description="Superficie aproximada en metros cuadrados")
@@ -11,6 +11,7 @@ class VacioCatastral(BaseModel):
     centroide_x: float = Field(..., description="Coordenada X (CRTM05)")
     centroide_y: float = Field(..., description="Coordenada Y (CRTM05)")
     fincas_colindantes: List[str] = Field(default_factory=list, description="Números de fincas que delimitan este vacío")
+    geometrias_colindantes: List[Dict[str, Any]] = Field(default_factory=list, description="Polígonos y datos de las fincas vecinas registradas")
     geometria: Dict[str, Any] = Field(..., description="Geometría GeoJSON del vacío (Polygon o MultiPolygon)")
 
 

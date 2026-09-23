@@ -23,11 +23,12 @@ class GapAnalysisService:
         self.detector = detector or GapDetector()
 
     def ejecutar_analisis_distrito(
-        self, distrito: str, area_minima_m2: float = 300.0, limite_predios: int = 150
+        self, distrito: str, area_minima_m2: float = 300.0, area_maxima_m2: float = 80000.0, limite_predios: int = 150
     ) -> Optional[ResultadoGapAnalysis]:
         """
         Ejecuta el análisis de vacíos topológicos para un distrito de Zarcero.
         Utiliza el envolvente (Convex Hull) de los predios si no hay capa distrital separada.
+        Descarta polígonos que superen el área máxima de lote para evitar el perímetro rural exterior.
         """
         predios_modelos = self.catastro_client.obtener_predios_distrito(distrito, limite=limite_predios)
         if not predios_modelos:
@@ -50,6 +51,7 @@ class GapAnalysisService:
             geometria_distrito=envolvente_zona,
             predios_catastrados=predios_input,
             area_minima_m2=area_minima_m2,
+            area_maxima_m2=area_maxima_m2,
         )
 
         return resultado

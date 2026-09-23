@@ -91,12 +91,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </form>
 
-      {/* Acciones Rápidas: Detectar Vacíos */}
+      {/* Acciones Rápidas: Detectar Vacíos & Escanear Boletín */}
       <div className="p-4 border-b border-slate-800/80 space-y-2">
         <button
           onClick={onEjecutarGapAnalysis}
           disabled={cargandoVacios}
-          className="w-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-between transition group"
+          className="w-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-between transition group"
         >
           <div className="flex items-center space-x-2">
             <Sparkles className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-12 transition" />
@@ -107,6 +107,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {totalVacios} hallazgos
             </span>
           )}
+        </button>
+
+        <button
+          onClick={onEscanearBoletin}
+          disabled={cargandoRemates}
+          className="w-full bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-between transition group"
+        >
+          <div className="flex items-center space-x-2">
+            <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 transition ${cargandoRemates ? 'animate-spin' : 'group-hover:rotate-45'}`} />
+            <span>{cargandoRemates ? 'Escaneando Boletín...' : 'Escanear Boletín'}</span>
+          </div>
+          <span className="bg-cyan-500/20 text-cyan-300 text-[10px] px-2 py-0.5 rounded-full font-bold">
+            {remates.length} remates
+          </span>
         </button>
       </div>
 
