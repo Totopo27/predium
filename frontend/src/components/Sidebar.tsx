@@ -38,7 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <div>
             <h1 className="font-extrabold text-base tracking-tight bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
-              buscaCatastro
+              Predium
             </h1>
             <p className="text-[11px] text-slate-400 font-medium">Inteligencia Patrimonial · Costa Rica</p>
           </div>

@@ -1,108 +1,124 @@
-# buscaCatastro 📍
+# Predium 📍
 
-**Plataforma de Inteligencia Inmobiliaria, Catastro y Saneamiento Patrimonial (Costa Rica)**
+**Plataforma de Inteligencia Inmobiliaria, Catastro Digital y Saneamiento Patrimonial (Costa Rica)**
 
-Sistema especializado en detectar, georreferenciar y sanear propiedades en estado de abandono, morosidad fiscal o vulnerabilidad sucesoria mediante el cruce de datos del Boletín Judicial (Imprenta Nacional), Catastro Digital (WFS / SNIT) y Registro Nacional (RNP).
-
----
-
-## 🏛️ Módulos Implementados
-
-1. **Módulo 1: Extractor y Gestor de Remates (`src/application/cazar_remates_service.py`)**
-   - Descarga y segmenta publicaciones oficiales de la Imprenta Nacional.
-   - Motor de NLP determinista con conversión de montos en palabras (*"cuarenta y cinco millones"* -> `45,000,000`).
-   - Mapeo de los 7 distritos de Zarcero (*Zarcero, Laguna, Tapesco, Guadalupe, Palmira, Zapote, Brisas*).
-   - Deduplicación en base de datos SQLite (`data/remates.db`) y exportador a CSV/JSON.
-
-2. **Módulo 2: Integración Geoespacial y Catastro (`src/infrastructure/catastro_zarcero_client.py`)**
-   - Conexión WFS 2.0.0 en tiempo real con soporte de filtros CQL.
-   - Consulta predial directa por número de finca o plano catastrado.
-   - Extracción de geometrías `MultiPolygon` en proyección oficial CRTM05 (EPSG:5367), área de registro, área GIS, frente, fondo y número de construcciones.
-   - Arquitectura escalable mediante **Patrón Strategy** (`CatastroProvider`) para admitir cantones con SIG propio y fallback nacional al SNIT central.
-
-3. **Módulo 3: Motor de Detección de Vacíos Catastrales / Gap Analysis (`src/application/gap_detector.py`)**
-   - Detección de "eslabones perdidos" (fincas sin dueño/título formal) mediante diferencia booleana espacial (`Diferencia = Límite - Predios Catastrados`).
-   - Algoritmo de filtrado de astillas (*slivers*) topológicas.
-   - Identificación automática de fincas colindantes que limitan con cada vacío.
-
-4. **Módulo 4: Diagnóstico Jurídico y Saneamiento Patrimonial (`src/application/diagnostico_patrimonial_service.py`)**
-   - Evaluación del título registral y emisión de dictamen estratégico:
-     - `LIQUIDACION_SOCIEDAD_DISUELTA`: Alerta de extinción por Ley 9428 para compra por debajo de mercado nombrando liquidador notarial/judicial.
-     - `NUDA_PROPIEDAD_USUFRUCTO`: Alerta de usufructo vitalicio para estructurar acuerdos de renta/cuidados a adultos mayores.
-     - `COMPRA_PREVIA_REMATE`: Alerta de embargos judiciales para rescate antes de la subasta.
-     - `LIMPIEZA_GRAVAMENES_PRESCRITOS`: Prescripción de pasivos antiguos.
-
-5. **Módulo 5: Visor Web Interactivo Local (`src/api/` y `static/index.html`)**
-   - Servidor montado en FastAPI + Uvicorn.
-   - Mapa interactivo Leaflet con ortofoto satelital de alta resolución (Esri Satellite) y calles (OSM).
-   - Reproyección al vuelo de coordenadas CRTM05 (EPSG:5367) a WGS84 con `proj4js`.
-   - Panel lateral con búsqueda catastral, lista de oportunidades y ficha técnica con evaluación patrimonial.
-
-6. **Módulo 6: Triage Inteligente con Modelos de Sistema 1 (`src/infrastructure/laya_triage_client.py`)**
-   - Clasificación no autoregresiva ultrarrápida (<35 ms) con decisiones tipadas y probabilidades calibradas (Laya / ModernBERT / mmBERT).
-   - Descarte automático de vehículos y muebles que no son inmuebles.
-   - Detección de morosidad fiscal/municipal (*nicho de oro*).
-   - Evaluación de riesgo de gravámenes complejos (usufructo, demandas, concesiones de agua) y nivel de urgencia de la subasta (1°, 2° o 3° remate).
-
-7. **Módulo 7: Orquestador y Worker de Ingesta Autónoma (`src/application/orchestrator_service.py` & `src/infrastructure/scheduler.py`)**
-   - Pipeline de sincronización autónoma continua con disparador de alertas de negocio.
-   - Función de *Catch-up* retrospectivo automático para cubrir fines de semana o cortes de red sin dejar días desatendidos.
-   - Alertas críticas automáticas para remates municipales y terceras subastas.
+Predium es un ecosistema proptech diseñado para detectar, georreferenciar y sanear propiedades en desuso, con morosidad tributaria o en vulnerabilidad sucesoria, cruzando datos oficiales del **Boletín Judicial** (Imprenta Nacional), **Catastro Digital WFS** (SNIT/Municipalidades) y el **Registro Nacional de Costa Rica** (RNP).
 
 ---
 
-## 🚀 Guía Rápida de Comandos CLI
+## 🏛️ Arquitectura del Sistema
 
-Para ejecutar los comandos, activa el entorno virtual:
-```powershell
-.\.venv\Scripts\activate
+```
+predium/
+├── src/
+│   ├── domain/               # Entidades puras y Value Objects (Remates, Predios, Diagnósticos)
+│   ├── application/          # Casos de uso:
+│   │   ├── boletin_parser.py           # NLP determinista para edictos judiciales
+│   │   ├── gap_detector.py             # Algoritmo de Gap Analysis espacial (Shapely)
+│   │   ├── diagnostico_patrimonial.py  # Motor de dictamen legal y saneamiento
+│   │   └── orchestrator_service.py     # Pipeline autónomo y sincronización diaria
+│   ├── infrastructure/       # Implementaciones concretas y adaptadores:
+│   │   ├── sqlite_repository.py        # Persistencia relacional y deduplicación
+│   │   ├── catastro_zarcero_client.py  # Cliente WFS 2.0.0 con filtros CQL
+│   │   ├── rnp_scraper_client.py       # Scraper/Parser de informes de rnpdigital.com
+│   │   └── laya_triage_client.py       # Modelo de Sistema 1 (<1 ms) para clasificación
+│   └── api/                  # Backend REST en FastAPI
+├── frontend/                 # Aplicación Web React + Vite + TypeScript + MapLibre GL
+├── tests/                    # Suite de 24 pruebas unitarias automatizadas (pytest)
+└── main.py                   # CLI unificado de la plataforma
 ```
 
-### 1. Iniciar el Visor Web Interactivo en el Navegador
-```powershell
+---
+
+## ⚡ Capacidades Principales
+
+1. **Cazador de Remates y Morosidad Municipal:**
+   - Monitorea publicaciones oficiales del Poder Judicial y detecta remates de fincas por impuestos territoriales impagos (IBI) y deudas bancarias.
+   - Extrae el Folio Real (`P-NNNNNN-DDD`), plano catastrado, expediente judicial y bases de subasta (1°, 2° al 75% y 3° al 25%).
+2. **Georreferenciación Catastral WFS (Patrón Strategy):**
+   - Conexión directa a servidores WFS 2.0.0 oficiales (Zona Piloto: Zarcero, escalable a nivel nacional vía SNIT central).
+   - Extrae polígonos `MultiPolygon` en coordenadas oficiales CRTM05 (EPSG:5367), área registrada vs. área física, frente, fondo y número de construcciones.
+3. **Detección de Vacíos Catastrales (Gap Analysis):**
+   - Algoritmo de diferencia booleana espacial que resta los predios inscritos del límite distrital para cazar **"eslabones perdidos"** (fincas fantasma, baldíos o posesiones históricas en abandono).
+4. **Diagnóstico Legal y Estrategias Patrimoniales (RNP):**
+   - Identifica inmuebles a nombre de **sociedades disueltas por la Ley N° 9428** para estructurar compras de rescate por debajo del valor de mercado.
+   - Detecta **usufructos vitalicios** para acuerdos de nuda propiedad con adultos mayores garantizando renta o cuidados en albergues.
+   - Evalúa embargos judiciales para adquisiciones preventivas antes de remates públicos.
+5. **Triage de Sistema 1 (<1 ms):**
+   - Clasificación ultra-rápida y calibrada basada en **Laya** para descartar vehículos y calificar urgencias sin alucinación.
+6. **Visor Web Satelital 2.5D/3D:**
+   - Interfaz en **React + MapLibre GL** con ortofoto satelital de alta resolución, reproyección geodésica y fichas de saneamiento.
+
+---
+
+## 🚀 Guía de Inicio Rápido
+
+### Requisitos
+- Python 3.12+ (o 3.14)
+- Node.js 20+ y npm
+
+### 1. Clonar e Instalar Backend
+```bash
+git clone https://github.com/Totopo27/predium.git
+cd predium
+
+# Crear y activar entorno virtual
+python -m venv .venv
+# En Windows:
+.\.venv\Scripts\activate
+# En Linux/Mac:
+source .venv/bin/activate
+
+# Instalar dependencias
+pip install -r requirements.txt
+```
+
+### 2. Ejecutar la Suite de Pruebas
+```bash
+pytest -v
+```
+> Valida el 100% de la lógica con 24 pruebas unitarias automatizadas.
+
+### 3. Iniciar el Backend API y Visor Local
+```bash
 python main.py visor
 ```
-> Abre automáticamente `http://127.0.0.1:8000` con el mapa satelital interactivo.
+> Servidor disponible en `http://127.0.0.1:8000` con documentación interactiva en `http://127.0.0.1:8000/docs`.
 
-### 2. Iniciar el Worker de Sincronización Automática
-```powershell
-# Ejecución continua cada 6 horas:
-python main.py worker --intervalo 6 --canton Zarcero
+### 4. Iniciar el Frontend de Desarrollo (React + Vite)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+> Abre tu navegador en `http://localhost:3000` con recarga instantánea HMR.
 
-# Sincronización inmediata de hoy:
+---
+
+## 🛠️ Comandos CLI Disponibles
+
+```bash
+# Sincronización inmediata de remates de hoy:
 python main.py worker --ejecutar-ahora --canton Zarcero
 
 # Barrido retrospectivo (catch-up) de los últimos 5 días hábiles:
 python main.py worker --catchup 5 --canton Zarcero
-```
 
-### 3. Triage de Edictos con Modelo de Sistema 1 (Laya)
-```powershell
-python main.py triage --texto "En este Despacho saquese a remate la finca matricula 2-123456-000 en cobro de Municipalidad de Zarcero por impuestos territoriales, soportando usufructo vitalicio."
-```
-
-### 4. Consultar un Predio Directo en el Catastro
-```powershell
+# Búsqueda directa de una finca en el catastro WFS:
 python main.py buscar-predio --finca 214978
-```
 
-### 5. Detectar Vacíos Catastrales (Eslabones Perdidos)
-```powershell
+# Detección de vacíos territoriales (Gap Analysis):
 python main.py detectar-vacios --distrito Guadalupe --area-min 500
-```
 
-### 6. Diagnóstico Legal de un Folio Real
-```powershell
+# Diagnóstico jurídico de un Folio Real:
 python main.py diagnosticar --folio 2-120500-000 --escenario sociedad_disuelta
+
+# Triage de Sistema 1 sobre el texto de un edicto:
+python main.py triage --texto "Sáquese a remate finca del partido de Alajuela..."
 ```
 
 ---
 
-## 🧪 Pruebas Automatizadas
+## 📄 Licencia
 
-El proyecto cuenta con una suite completa de pruebas unitarias y de integración que validan el 100% de la funcionalidad:
-
-```powershell
-pytest -v
-```
-*(24 pruebas unitarias pasando al 100%)*
+Este proyecto está bajo la Licencia MIT.

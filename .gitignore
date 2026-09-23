@@ -32,12 +32,22 @@ htmlcov/
 # Environments & Secrets
 .env
 .env.local
+*.local
 
 # IDE
 .vscode/
 .idea/
 
-# Data cache & artifacts
+# Data cache & databases
 data/raw/
 data/cache/
+data/*.db
+data/*.sqlite
+data/*.csv
+data/*.geojson
 *.log
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/

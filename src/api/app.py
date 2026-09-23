@@ -5,7 +5,7 @@ from pathlib import Path
 from src.api.routes import api_router
 
 app = FastAPI(
-    title="buscaCatastro API",
+    title="Predium API",
     description="Motor de Inteligencia Inmobiliaria, Catastro y Saneamiento Patrimonial (Costa Rica)",
     version="1.0.0",
 )

@@ -314,7 +314,7 @@ def comando_visor(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="buscaCatastro - Plataforma de Inteligencia Inmobiliaria y Catastro (Costa Rica)"
+        description="Predium - Plataforma de Inteligencia Inmobiliaria y Catastro (Costa Rica)"
     )
     subparsers = parser.add_subparsers(dest="comando", required=True)
 
