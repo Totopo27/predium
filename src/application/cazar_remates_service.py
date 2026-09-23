@@ -5,12 +5,13 @@ from src.domain.repository_interface import RemateRepository
 from src.application.boletin_parser import BoletinJudicialParser
 from src.infrastructure.imprenta_client import ImprentaNacionalClient
 from src.infrastructure.sqlite_repository import SqliteRemateRepository
+from src.infrastructure.laya_triage_client import LayaTriageClient
 
 
 class CazarRematesService:
     """
-    Servicio de aplicación encargado de orquestar la descarga, parseo, filtrado
-    y persistencia con deduplicación de edictos de remate.
+    Servicio de aplicación encargado de orquestar la descarga, parseo, filtrado,
+    triage de Sistema 1 y persistencia con deduplicación de edictos de remate.
     """
 
     def __init__(
@@ -18,16 +19,19 @@ class CazarRematesService:
         client: Optional[ImprentaNacionalClient] = None,
         parser: Optional[BoletinJudicialParser] = None,
         repository: Optional[RemateRepository] = None,
+        triage_client: Optional[LayaTriageClient] = None,
     ):
         self.client = client or ImprentaNacionalClient()
         self.parser = parser or BoletinJudicialParser()
         self.repository = repository or SqliteRemateRepository()
+        self.triage_client = triage_client or LayaTriageClient()
 
     def escanear_fecha(
         self, fecha: date, canton_filtro: Optional[str] = "Zarcero", guardar: bool = True
     ) -> tuple[List[EdictoRemate], int]:
         """
         Descarga y extrae los edictos de remate de una fecha específica.
+        Aplica filtro geográfico y triage de Sistema 1 (descarta vehículos).
         Retorna (lista_detectados, cantidad_nuevos_guardados).
         """
         if fecha.weekday() >= 5:
@@ -44,9 +48,19 @@ class CazarRematesService:
             if canton_filtro and not self.parser.es_de_canton(bloque, canton_filtro):
                 continue
 
+            # Triage inteligente con Sistema 1
+            triage = self.triage_client.clasificar_edicto(bloque)
+            if not triage.es_inmueble:
+                # Omitir vehículos o muebles
+                continue
+
             edicto = self.parser.parsear_texto_edicto(bloque)
             if edicto:
                 edicto.fecha_publicacion = fecha
+                edicto.tipo_bien = triage.tipo_bien.value
+                edicto.origen_deuda = triage.origen_deuda.value
+                edicto.es_morosidad_municipal = triage.es_morosidad_municipal
+                edicto.urgencia = triage.urgencia.value
                 edictos.append(edicto)
 
         nuevos = 0

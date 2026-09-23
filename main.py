@@ -11,6 +11,7 @@ from src.infrastructure.sqlite_repository import SqliteRemateRepository
 from src.infrastructure.catastro_zarcero_client import CatastroZarceroClient
 from src.infrastructure.registro_nacional_client import RegistroNacionalClient
 from src.infrastructure.rnp_scraper_client import RnpScraperClient
+from src.infrastructure.laya_triage_client import LayaTriageClient
 from src.domain.registro_models import TitularFinca, TipoPersona, Gravamen, GravamenTipo, EstadoSociedad
 
 # Asegurar UTF-8 en salida estándar para consolas de Windows
@@ -43,7 +44,8 @@ def comando_escanear(args):
     if edictos:
         print("\nResumen de fincas detectadas:")
         for i, e in enumerate(edictos, 1):
-            print(f"   {i}. Folio: {e.finca.folio_real} | Plano: {e.finca.plano_catastrado or 'N/A'} | Base: {e.base.moneda.value} {e.base.monto_base:,.2f}")
+            tipo_tag = "[MUNICIPAL]" if e.es_morosidad_municipal else "[BANCARIO]"
+            print(f"   {i}. {tipo_tag} Folio: {e.finca.folio_real} | Plano: {e.finca.plano_catastrado or 'N/A'} | Base: {e.base.moneda.value} {e.base.monto_base:,.2f}")
 
 
 def comando_listar(args):
@@ -176,7 +178,6 @@ def comando_diagnosticar(args):
     folio = args.folio
     print(f"\n[RNP] Ejecutando diagnostico patrimonial para Folio Real: {folio}...")
 
-    # Si se pasa un archivo HTML real del RNP descargado
     if args.archivo:
         scraper = RnpScraperClient()
         print(f"      Procesando archivo registral: {args.archivo}...")
@@ -232,12 +233,29 @@ def comando_diagnosticar(args):
     if diag.titulares:
         print(f"Titular:                  {diag.titulares[0].nombre} ({diag.titulares[0].cedula})")
         print(f"Tipo Titular:             {diag.titulares[0].tipo.value}")
-    print(f"Gravámenes detectados:    {len(diag.gravamenes)}")
+    print(f"Gravamenes detectados:    {len(diag.gravamenes)}")
     print(f"Alerta Sociedad Disuelta: {'SI (Ley 9428)' if diag.alerta_sociedad_disuelta else 'NO'}")
     print(f"Alerta Usufructo Activo:  {'SI' if diag.alerta_usufructo_activo else 'NO'}")
     print(f"Alerta Embargos:          {'SI' if diag.alerta_embargos_judiciales else 'NO'}")
     print(f"\nEstrategia Sugerida:      *** {diag.estrategia_sugerida.value} ***")
     print(f"Dictamen Tecnico:         {diag.diagnostico_resumen}")
+    print("-" * 50)
+
+
+def comando_triage(args):
+    texto = args.texto
+    print("\n[TRIAGE-SISTEMA-1] Analizando texto del edicto con modelo de decision calibrada...")
+    client = LayaTriageClient()
+    res = client.clasificar_edicto(texto)
+
+    print("\n--- RESULTADO DE CLASIFICACION (SISTEMA 1) ---")
+    print(f"Tipo de Bien:             {res.tipo_bien.value} (Confianza: {res.confianza_tipo_bien*100:.1f}%)")
+    print(f"Origen de la Deuda:       {res.origen_deuda.value} (Confianza: {res.confianza_origen*100:.1f}%)")
+    print(f"Es Inmueble (Target):     {'SI' if res.es_inmueble else 'NO (Descartar)'}")
+    print(f"Es Morosidad Municipal:   {'SI (Oportunidad Oro)' if res.es_morosidad_municipal else 'NO'}")
+    print(f"Riesgo Legal Complejo:    {'SI' if res.riesgo_gravamen_complejo else 'NO'} (Prob: {res.probabilidad_riesgo*100:.1f}%)")
+    print(f"Etapa de Subasta:         {res.urgencia.value}")
+    print(f"Latencia de Inferencia:   {res.tiempo_inferencia_ms:.2f} ms")
     print("-" * 50)
 
 
@@ -320,6 +338,11 @@ def main():
     )
     parser_diag.add_argument("--archivo", type=str, help="Ruta a archivo HTML de consulta RNP para parseo real")
     parser_diag.set_defaults(func=comando_diagnosticar)
+
+    # Subcomando: triage
+    parser_triage = subparsers.add_parser("triage", help="Ejecuta el triage de Sistema 1 sobre el texto de un edicto")
+    parser_triage.add_argument("--texto", type=str, required=True, help="Texto del edicto para clasificar")
+    parser_triage.set_defaults(func=comando_triage)
 
     # Subcomando: visor
     parser_visor = subparsers.add_parser("visor", help="Levanta el Visor Web Interactivo en el navegador")

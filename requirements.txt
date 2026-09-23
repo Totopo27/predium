@@ -9,7 +9,10 @@ pydantic>=2.7.0
 # GIS & Spatial Operations
 shapely>=2.0.0
 
-# API (Next step)
+# System 1 Typed Decisions Model
+laya>=0.3.10
+
+# API & Web Viewer
 fastapi>=0.110.0
 uvicorn>=0.29.0
 
