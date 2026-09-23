@@ -1,4 +1,4 @@
-# Predium 📍
+# Predium
 
 **Plataforma de Inteligencia Inmobiliaria, Catastro Digital y Saneamiento Patrimonial (Costa Rica)**
 
@@ -6,7 +6,7 @@ Predium es un ecosistema proptech diseñado para detectar, georreferenciar y san
 
 ---
 
-## 🏛️ Arquitectura del Sistema
+## Arquitectura del Sistema
 
 ```
 predium/
@@ -30,7 +30,7 @@ predium/
 
 ---
 
-## ⚡ Capacidades Principales
+## Capacidades Principales
 
 1. **Cazador de Remates y Morosidad Municipal:**
    - Monitorea publicaciones oficiales del Poder Judicial y detecta remates de fincas por impuestos territoriales impagos (IBI) y deudas bancarias.
@@ -51,7 +51,7 @@ predium/
 
 ---
 
-## 🚀 Guía de Inicio Rápido
+## Guía de Inicio Rápido
 
 ### Requisitos
 - Python 3.12+ (o 3.14)
@@ -95,7 +95,7 @@ npm run dev
 
 ---
 
-## 🛠️ Comandos CLI Disponibles
+## Comandos CLI Disponibles
 
 ```bash
 # Sincronización inmediata de remates de hoy:
@@ -119,6 +119,6 @@ python main.py triage --texto "Sáquese a remate finca del partido de Alajuela..
 
 ---
 
-## 📄 Licencia
+## Licencia
 
 Este proyecto está bajo la Licencia MIT.
