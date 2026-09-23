@@ -22,6 +22,51 @@ export const MapView: React.FC<MapProps> = ({
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
+  // Función segura para volar a coordenadas válidas de Costa Rica
+  const centrarEnCoords = (coordsGeoJson: any) => {
+    const map = mapRef.current;
+    if (!map || !coordsGeoJson) return;
+
+    const bounds = new maplibregl.LngLatBounds();
+    let puntosValidos = 0;
+
+    const recorrer = (c: any) => {
+      if (typeof c[0] === 'number') {
+        const lon = c[0];
+        const lat = c[1];
+        // Rango geográfico estricto de Costa Rica en WGS84
+        if (lon >= -87.0 && lon <= -82.0 && lat >= 7.5 && lat <= 12.0) {
+          bounds.extend([lon, lat]);
+          puntosValidos++;
+        }
+      } else if (Array.isArray(c)) {
+        c.forEach(recorrer);
+      }
+    };
+
+    recorrer(coordsGeoJson);
+
+    if (puntosValidos > 0 && !bounds.isEmpty()) {
+      map.fitBounds(bounds, { padding: 90, maxZoom: 17, duration: 1200 });
+    }
+  };
+
+  // Función para alternar capas base de satélite y calles
+  const cambiarCapaBase = (tipo: 'satelite' | 'calles') => {
+    const map = mapRef.current;
+    if (!map) return;
+    try {
+      if (map.getLayer('capa-satelite')) {
+        map.setLayoutProperty('capa-satelite', 'visibility', tipo === 'satelite' ? 'visible' : 'none');
+      }
+      if (map.getLayer('capa-calles')) {
+        map.setLayoutProperty('capa-calles', 'visibility', tipo === 'calles' ? 'visible' : 'none');
+      }
+    } catch (err) {
+      console.warn('Error alternando capas base:', err);
+    }
+  };
+
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
 
@@ -91,7 +136,7 @@ export const MapView: React.FC<MapProps> = ({
         source: 'vacios-source',
         paint: {
           'fill-color': '#f59e0b',
-          'fill-opacity': 0.45,
+          'fill-opacity': 0.5,
         },
       });
 
@@ -117,7 +162,7 @@ export const MapView: React.FC<MapProps> = ({
         source: 'remates-source',
         paint: {
           'fill-color': '#f43f5e',
-          'fill-opacity': 0.4,
+          'fill-opacity': 0.45,
         },
       });
 
@@ -180,109 +225,68 @@ export const MapView: React.FC<MapProps> = ({
     };
   }, []);
 
-  // Conmutador instantáneo y determinista entre satélite y calles
+  // Observador de tipoMapa con aplicación inmediata
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    const aplicar = () => {
-      try {
-        if (map.getLayer('capa-satelite')) {
-          map.setLayoutProperty(
-            'capa-satelite',
-            'visibility',
-            tipoMapa === 'satelite' ? 'visible' : 'none'
-          );
-        }
-        if (map.getLayer('capa-calles')) {
-          map.setLayoutProperty(
-            'capa-calles',
-            'visibility',
-            tipoMapa === 'calles' ? 'visible' : 'none'
-          );
-        }
-      } catch (e) {
-        // En caso de que el estilo esté en transición
-      }
-    };
-
-    if (map.loaded()) {
-      aplicar();
-    } else {
-      map.once('load', aplicar);
-    }
+    cambiarCapaBase(tipoMapa);
   }, [tipoMapa]);
 
   // Actualizar datos de remates
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-    const src = map.getSource('remates-source') as maplibregl.GeoJSONSource;
-    if (src && rematesGeoJson) {
-      src.setData(rematesGeoJson);
-    }
+    if (!map) return;
+    try {
+      const src = map.getSource('remates-source') as maplibregl.GeoJSONSource;
+      if (src && rematesGeoJson) {
+        src.setData(rematesGeoJson);
+      }
+    } catch (e) {}
   }, [rematesGeoJson]);
 
   // Actualizar datos de vacíos y volar automáticamente
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-    const src = map.getSource('vacios-source') as maplibregl.GeoJSONSource;
-    if (src && vaciosGeoJson) {
-      src.setData(vaciosGeoJson);
-
-      const features = vaciosGeoJson.features;
-      if (features && features.length > 0) {
-        const bounds = new maplibregl.LngLatBounds();
-        const recorrer = (c: any) => {
-          if (typeof c[0] === 'number') {
-            bounds.extend([c[0], c[1]]);
-          } else {
-            c.forEach(recorrer);
-          }
-        };
-        features.forEach((f: any) => {
-          if (f.geometry?.coordinates) recorrer(f.geometry.coordinates);
-        });
-        map.fitBounds(bounds, { padding: 80, maxZoom: 16, pitch: 45, duration: 1500 });
+    if (!map) return;
+    try {
+      const src = map.getSource('vacios-source') as maplibregl.GeoJSONSource;
+      if (src && vaciosGeoJson) {
+        src.setData(vaciosGeoJson);
+        const features = vaciosGeoJson.features;
+        if (features && features.length > 0 && features[0].geometry) {
+          centrarEnCoords(features[0].geometry.coordinates);
+        }
       }
-    }
+    } catch (e) {}
   }, [vaciosGeoJson]);
 
-  // Actualizar y volar al predio buscado
+  // Actualizar y volar al predio buscado / seleccionado
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-    const src = map.getSource('predio-buscado-source') as maplibregl.GeoJSONSource;
-    if (src && predioBuscadoGeoJson) {
-      src.setData(predioBuscadoGeoJson);
-
-      const coords = predioBuscadoGeoJson.geometry?.coordinates;
-      if (coords) {
-        const bounds = new maplibregl.LngLatBounds();
-        const recorrer = (c: any) => {
-          if (typeof c[0] === 'number') {
-            bounds.extend([c[0], c[1]]);
-          } else {
-            c.forEach(recorrer);
-          }
-        };
-        recorrer(coords);
-        map.fitBounds(bounds, { padding: 80, maxZoom: 18, pitch: 45, duration: 1500 });
+    if (!map) return;
+    try {
+      const src = map.getSource('predio-buscado-source') as maplibregl.GeoJSONSource;
+      if (src && predioBuscadoGeoJson) {
+        src.setData(predioBuscadoGeoJson);
+        const coords = predioBuscadoGeoJson.geometry?.coordinates;
+        if (coords) {
+          centrarEnCoords(coords);
+        }
       }
-    }
+    } catch (e) {}
   }, [predioBuscadoGeoJson]);
 
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
 
-      {/* Controles flotantes superiores */}
+      {/* Controles flotantes de capas y perspectiva */}
       <div className="absolute top-5 left-5 z-10 flex space-x-2">
-        {/* Toggle con dos botones claros: Satélite | Calles */}
+        {/* Toggle Satélite | Calles con acción directa */}
         <div className="flex bg-slate-900/90 rounded-xl border border-slate-700/80 p-0.5 shadow-xl backdrop-blur-md">
           <button
-            onClick={() => onSetTipoMapa('satelite')}
+            onClick={() => {
+              onSetTipoMapa('satelite');
+              cambiarCapaBase('satelite');
+            }}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
               tipoMapa === 'satelite'
                 ? 'bg-emerald-600 text-white shadow-sm'
@@ -292,7 +296,10 @@ export const MapView: React.FC<MapProps> = ({
             Satélite
           </button>
           <button
-            onClick={() => onSetTipoMapa('calles')}
+            onClick={() => {
+              onSetTipoMapa('calles');
+              cambiarCapaBase('calles');
+            }}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
               tipoMapa === 'calles'
                 ? 'bg-emerald-600 text-white shadow-sm'
