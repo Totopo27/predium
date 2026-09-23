@@ -2,6 +2,7 @@ from datetime import date
 from unittest.mock import MagicMock
 from src.application.cazar_remates_service import CazarRematesService
 from src.infrastructure.imprenta_client import ImprentaNacionalClient
+from src.domain.repository_interface import RemateRepository
 
 
 def test_cazar_remates_service_filtra_zarcero():
@@ -11,14 +12,16 @@ def test_cazar_remates_service_filtra_zarcero():
         "En este Despacho, sáquese a remate finca del partido de Alajuela, matrícula número 111111-000, situada en cantón Zarcero. Plano A-123. Expediente 23-1111-CJ. Base: diez millones. ( IN2024111111 ).",
         "En este Despacho, sáquese a remate finca del partido de San José, matrícula número 222222-000, situada en cantón Escazú. Base: veinte millones. ( IN2024222222 ).",
     ]
+    mock_repo = MagicMock(spec=RemateRepository)
+    mock_repo.guardar_muchos.return_value = 1
 
-    service = CazarRematesService(client=mock_client)
-    # Lunes 21 de agosto de 2023
+    service = CazarRematesService(client=mock_client, repository=mock_repo)
     fecha = date(2023, 8, 21)
-    
-    resultados = service.escanear_fecha(fecha, canton_filtro="Zarcero")
+
+    resultados, nuevos = service.escanear_fecha(fecha, canton_filtro="Zarcero")
 
     assert len(resultados) == 1
+    assert nuevos == 1
     assert resultados[0].finca.numero_finca == "111111"
     assert resultados[0].finca.folio_real == "2-111111-000"
     assert "Zarcero" in resultados[0].ubicacion.canton
