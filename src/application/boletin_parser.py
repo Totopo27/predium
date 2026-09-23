@@ -21,15 +21,21 @@ PROVINCIAS_MAP: Dict[str, int] = {
     "limon": 7,
 }
 
-DISTRITOS_ZARCERO = [
-    "zarcero",
-    "laguna",
-    "tapesco",
-    "guadalupe",
-    "palmira",
-    "zapote",
-    "brisas",
-]
+CANTON_DISTRITOS_MAP: Dict[str, List[str]] = {
+    "zarcero": [
+        "zarcero", "alfaro ruiz", "laguna", "tapesco", "guadalupe", "palmira", "zapote", "brisas",
+        "anateri", "pueblo nuevo", "la legua", "santa elena"
+    ],
+    "alfaro ruiz": [
+        "zarcero", "alfaro ruiz", "laguna", "tapesco", "guadalupe", "palmira", "zapote", "brisas",
+        "anateri", "pueblo nuevo", "la legua", "santa elena"
+    ],
+    "san ramon": [
+        "san ramon", "san ramón", "santiago", "san juan", "piedades norte", "piedades sur",
+        "san rafael", "san isidro", "angeles", "ángeles", "alfaro", "volio", "concepcion",
+        "concepción", "zapotal", "penas blancas", "peñas blancas", "san lorenzo"
+    ],
+}
 
 MESES_ES = {
     "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
@@ -51,20 +57,18 @@ class BoletinJudicialParser:
     """
 
     def es_de_canton(self, texto: str, canton: str) -> bool:
-        """Determina si el edicto hace referencia a un cantón específico o a sus distritos."""
+        """Determina si el edicto hace referencia a un cantón específico, su juzgado o sus distritos."""
         texto_norm = normalizar_texto(texto)
         canton_norm = normalizar_texto(canton)
 
-        # Si el cantón es Zarcero, chequear también distritos y sinónimos
-        if canton_norm in ("zarcero", "alfaro ruiz"):
-            if "zarcero" in texto_norm or "alfaro ruiz" in texto_norm:
-                return True
-            for dist in DISTRITOS_ZARCERO:
-                if re.search(rf"\bdistrito\s*(?:\d+\s*)?{dist}\b", texto_norm):
+        # Si tenemos lista de distritos/sinónimos para este cantón
+        if canton_norm in CANTON_DISTRITOS_MAP:
+            for dist in CANTON_DISTRITOS_MAP[canton_norm]:
+                if dist in texto_norm:
                     return True
-            return False
 
-        patron = rf"\b(?:canton\s*(?:\d+\s*)?)?{re.escape(canton_norm)}\b"
+        # Búsqueda flexible por nombre de cantón o juzgado
+        patron = rf"\b(?:canton\s*(?:[0-9]+[-\s]*)?|juzgado\s+[^,\n]+?de\s+)?{re.escape(canton_norm)}\b"
         return bool(re.search(patron, texto_norm))
 
     def extraer_id_edicto(self, texto: str) -> Optional[str]:
@@ -144,27 +148,37 @@ class BoletinJudicialParser:
                 provincia_detectada = prov_nombre.title()
                 break
 
-        canton_detectado = "Zarcero" if ("zarcero" in texto_norm or "alfaro ruiz" in texto_norm) else "Desconocido"
+        canton_detectado = "Desconocido"
+
+        # Soporte para cantón con número y guion: "cantón 13-Upala" o "cantón 11 Zarcero" o "cantón San Ramón"
         match_canton = re.search(
-            r"cant[oó]n\s*(?:\d+\s*)?([A-Za-z\s]+?)(?:,|\.|\s+de la provincia)",
+            r"cant[oó]n\s*(?:[0-9]+[-\s]*)?([A-Za-z\s]+?)(?:,|\.|\s+de la provincia)",
             texto,
             re.IGNORECASE,
         )
         if match_canton:
             canton_detectado = match_canton.group(1).strip()
+        elif "zarcero" in texto_norm or "alfaro ruiz" in texto_norm:
+            canton_detectado = "Zarcero"
+        elif "san ramon" in texto_norm:
+            canton_detectado = "San Ramón"
 
         distrito_detectado = None
         match_distrito = re.search(
-            r"distrito\s*(?:\d+\s*)?([A-Za-z\s]+?)(?:,|\.|\s+cant[oó]n)",
+            r"distrito\s*(?:[0-9]+[-\s]*)?([A-Za-z\s]+?)(?:,|\.|\s+cant[oó]n)",
             texto,
             re.IGNORECASE,
         )
         if match_distrito:
             distrito_detectado = match_distrito.group(1).strip()
         else:
-            for dist in DISTRITOS_ZARCERO:
-                if dist in texto_norm:
-                    distrito_detectado = dist.title()
+            # Buscar en los distritos conocidos de Zarcero y San Ramón
+            for canton_k, distritos_lista in CANTON_DISTRITOS_MAP.items():
+                for dist in distritos_lista:
+                    if dist in texto_norm and dist not in ("zarcero", "san ramon", "alfaro ruiz"):
+                        distrito_detectado = dist.title()
+                        break
+                if distrito_detectado:
                     break
 
         return UbicacionFinca(
@@ -177,8 +191,6 @@ class BoletinJudicialParser:
         texto_norm = normalizar_texto(texto)
         moneda = Moneda.USD if "dolares" in texto_norm else Moneda.CRC
 
-        # Capturar la cláusula de base
-        # Ej: "con una base de cuarenta y cinco millones de colones"
         match_base_texto = re.search(r"base de\s+([^,;\.]+?)(?:colones|d[oó]lares|\.|\,)", texto_norm)
         monto_base = 0.0
 

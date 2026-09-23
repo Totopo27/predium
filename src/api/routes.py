@@ -165,6 +165,7 @@ def buscar_predio(
 
 @api_router.get("/vacios/geojson")
 def vacios_geojson(
+    canton: str = "Zarcero",
     distrito: str = "TODOS",
     area_min: float = 300.0,
     area_max: float = 80000.0,
@@ -174,6 +175,7 @@ def vacios_geojson(
 
     if distrito.upper() in ("TODOS", "CANTON", "ZARCERO", "COMPLETO"):
         vacios = service.ejecutar_analisis_canton(
+            canton=canton,
             area_minima_m2=area_min,
             area_maxima_m2=area_max,
             limite_predios_por_distrito=limite_predios,
@@ -181,6 +183,7 @@ def vacios_geojson(
     else:
         resultado = service.ejecutar_analisis_distrito(
             distrito=distrito,
+            canton=canton,
             area_minima_m2=area_min,
             area_maxima_m2=area_max,
             limite_predios=limite_predios,

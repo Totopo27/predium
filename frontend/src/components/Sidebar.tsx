@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Search, MapPin, AlertTriangle, Building, Flame, Layers, Sparkles, HelpCircle, Eye, RefreshCw, Calendar, Clock } from 'lucide-react';
+import { Search, MapPin, AlertTriangle, Building, Flame, Layers, Sparkles, HelpCircle, Eye, RefreshCw, Calendar, Clock, ChevronDown } from 'lucide-react';
 import type { Remate } from '../types';
 
 interface SidebarProps {
   remates: Remate[];
   vaciosFeatures: any[];
+  cantonActivo: string;
+  onCambiarCanton: (canton: string) => void;
   onSelectRemate: (remate: Remate) => void;
   onSelectVacio: (vacioFeature: any) => void;
   onBuscarFinca: (fincaOPlano: string) => void;
@@ -15,9 +17,41 @@ interface SidebarProps {
   totalVacios: number;
 }
 
+const DISTRITOS_POR_CANTON: Record<string, { id: string; label: string }[]> = {
+  Zarcero: [
+    { id: 'TODOS', label: 'Todo el Cantón (7 Distritos)' },
+    { id: 'GUADALUPE', label: 'Guadalupe' },
+    { id: 'ZAPOTE', label: 'Zapote' },
+    { id: 'PALMIRA', label: 'Palmira' },
+    { id: 'ZARCERO', label: 'Zarcero Centro' },
+    { id: 'LAGUNA', label: 'Laguna' },
+    { id: 'TAPESCO', label: 'Tapesco' },
+    { id: 'BRISAS', label: 'Brisas' },
+  ],
+  'San Ramón': [
+    { id: 'TODOS', label: 'Todo el Cantón (14 Distritos)' },
+    { id: 'SAN RAMON', label: 'San Ramón Centro' },
+    { id: 'PENAS BLANCAS', label: 'Peñas Blancas' },
+    { id: 'ALFARO', label: 'Alfaro' },
+    { id: 'SANTIAGO', label: 'Santiago' },
+    { id: 'SAN JUAN', label: 'San Juan' },
+    { id: 'PIEDADES NORTE', label: 'Piedades Norte' },
+    { id: 'PIEDADES SUR', label: 'Piedades Sur' },
+    { id: 'SAN RAFAEL', label: 'San Rafael' },
+    { id: 'SAN ISIDRO', label: 'San Isidro' },
+    { id: 'ANGELES', label: 'Ángeles' },
+    { id: 'VOLIO', label: 'Volio' },
+    { id: 'CONCEPCION', label: 'Concepción' },
+    { id: 'ZAPOTAL', label: 'Zapotal' },
+    { id: 'SAN LORENZO', label: 'San Lorenzo' },
+  ],
+};
+
 export const Sidebar: React.FC<SidebarProps> = ({
   remates,
   vaciosFeatures,
+  cantonActivo,
+  onCambiarCanton,
   onSelectRemate,
   onSelectVacio,
   onBuscarFinca,
@@ -30,7 +64,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [terminoBusqueda, setTerminoBusqueda] = useState('');
   const [filtroRemates, setFiltroRemates] = useState('');
   const [distritoSeleccionado, setDistritoSeleccionado] = useState('TODOS');
-  
+
   // Parámetros de Escaneo de Boletín
   const [modoEscaneo, setModoEscaneo] = useState<'dias' | 'fecha'>('dias');
   const [diasEscaneo, setDiasEscaneo] = useState<number>(15);
@@ -63,9 +97,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     );
   });
 
+  const distritosDisponibles = DISTRITOS_POR_CANTON[cantonActivo] || DISTRITOS_POR_CANTON['Zarcero'];
+
   return (
     <aside className="w-96 h-screen bg-slate-950/85 backdrop-blur-xl border-r border-slate-800/80 flex flex-col z-20 shadow-2xl">
-      {/* Header */}
+      {/* Header con Selector de Cantón Activo */}
       <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 via-teal-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
@@ -75,10 +111,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <h1 className="font-extrabold text-base tracking-tight bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
               Predium
             </h1>
-            <p className="text-[11px] text-slate-400 font-medium flex items-center space-x-1">
-              <MapPin className="w-3 h-3 text-slate-500" />
-              <span>Zarcero, Alajuela</span>
-            </p>
+            {/* Selector de Cantón Activo */}
+            <div className="flex items-center space-x-1 mt-0.5">
+              <MapPin className="w-3 h-3 text-emerald-400 shrink-0" />
+              <div className="relative inline-flex items-center">
+                <select
+                  value={cantonActivo}
+                  onChange={(e) => {
+                    onCambiarCanton(e.target.value);
+                    setDistritoSeleccionado('TODOS');
+                  }}
+                  className="bg-transparent text-[11px] font-bold text-slate-200 focus:outline-none cursor-pointer hover:text-emerald-300 pr-4 appearance-none"
+                >
+                  <option value="Zarcero" className="bg-slate-900 text-slate-200">Zarcero, Alajuela</option>
+                  <option value="San Ramón" className="bg-slate-900 text-slate-200">San Ramón, Alajuela</option>
+                </select>
+                <ChevronDown className="w-2.5 h-2.5 text-slate-400 pointer-events-none absolute right-0" />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -87,14 +137,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <form onSubmit={handleSubmit} className="p-4 border-b border-slate-800/80 space-y-2">
         <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
           <Search className="w-3 h-3 text-emerald-400" />
-          <span>Consulta Catastral WFS</span>
+          <span>Consulta Catastral WFS ({cantonActivo})</span>
         </label>
         <div className="flex space-x-2">
           <input
             type="text"
             value={terminoBusqueda}
             onChange={(e) => setTerminoBusqueda(e.target.value)}
-            placeholder="Ej: 214978 (Finca o Plano)"
+            placeholder="Ej: 313004 (Finca o Plano)"
             className="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500 text-slate-100 placeholder-slate-500 transition"
           />
           <button
@@ -111,20 +161,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* BLOQUE VACÍOS */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Distrito a Analizar</label>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Distrito ({cantonActivo})</label>
             <select
               value={distritoSeleccionado}
               onChange={(e) => setDistritoSeleccionado(e.target.value)}
-              className="bg-slate-900 border border-slate-700/80 rounded-lg px-2 py-0.5 text-[11px] text-slate-200 focus:outline-none focus:border-amber-400"
+              className="bg-slate-900 border border-slate-700/80 rounded-lg px-2 py-0.5 text-[11px] text-slate-200 focus:outline-none focus:border-amber-400 max-w-[190px] truncate"
             >
-              <option value="TODOS">Cantón Completo (Todos)</option>
-              <option value="GUADALUPE">Guadalupe</option>
-              <option value="ZAPOTE">Zapote</option>
-              <option value="PALMIRA">Palmira</option>
-              <option value="ZARCERO">Zarcero Centro</option>
-              <option value="LAGUNA">Laguna</option>
-              <option value="TAPESCO">Tapesco</option>
-              <option value="BRISAS">Brisas</option>
+              {distritosDisponibles.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -148,7 +195,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* BLOQUE ESCANEO BOLETÍN CON CONFIGURACIÓN */}
         <div className="space-y-1.5 pt-1 border-t border-slate-800/60">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Escaneo de Remates</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Escaneo de Remates ({cantonActivo})</span>
             <button
               onClick={() => setMostrarConfigEscaneo(!mostrarConfigEscaneo)}
               className="text-[10px] text-cyan-400 hover:text-cyan-300 underline font-medium"
@@ -211,7 +258,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     placeholder="YYYY-MM-DD"
                     className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
                   />
-                  <p className="text-[10px] text-slate-500 italic">Ej: 2023-08-21 para consultar ediciones pasadas.</p>
+                  <p className="text-[10px] text-slate-500 italic">Ej: 2023-08-18 para remates de San Ramón.</p>
                 </div>
               )}
             </div>
@@ -224,10 +271,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <div className="flex items-center space-x-2">
               <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 transition ${cargandoRemates ? 'animate-spin' : 'group-hover:rotate-45'}`} />
-              <span>{cargandoRemates ? 'Escaneando Boletín...' : 'Escanear Boletín'}</span>
+              <span>{cargandoRemates ? 'Escaneando Boletín...' : `Escanear Boletín (${cantonActivo})`}</span>
             </div>
             <span className="bg-cyan-500/20 text-cyan-300 text-[10px] px-2 py-0.5 rounded-full font-bold">
-              {remates.length} remates
+              {rematesFiltrados.length} remates
             </span>
           </button>
         </div>
@@ -241,7 +288,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center justify-between">
               <label className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center space-x-1">
                 <HelpCircle className="w-3 h-3 text-amber-400" />
-                <span>Vacíos Catastrales (Sin Registro)</span>
+                <span>Vacíos Catastrales ({cantonActivo})</span>
               </label>
               <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">
                 {vaciosFeatures.length}
@@ -271,7 +318,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {Number(p.area_m2 || 0).toLocaleString()} m²
                       </span>
                       <span className="text-[10px] text-slate-400">
-                        {p.distrito || 'Guadalupe'}
+                        {p.distrito || cantonActivo}
                       </span>
                     </div>
                     <p className="text-[10px] text-slate-400 truncate mt-1">
@@ -289,7 +336,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center justify-between">
             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
               <Layers className="w-3 h-3 text-cyan-400" />
-              <span>Remates Judiciales y Municipales</span>
+              <span>Remates ({cantonActivo})</span>
             </label>
             <div className="flex items-center space-x-1.5">
               <button
@@ -320,7 +367,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {rematesFiltrados.length === 0 ? (
             <div className="text-center py-6 text-slate-500 space-y-2">
               <AlertTriangle className="w-5 h-5 mx-auto text-slate-600" />
-              <p className="text-xs">No se encontraron remates coincidentes.</p>
+              <p className="text-xs">No hay remates cargados para {cantonActivo}.<br/>Usá 'Escanear Boletín' arriba.</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -355,7 +402,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       {r.moneda} {r.monto_base.toLocaleString()}
                     </span>
                     <span className="text-[10px] text-slate-400 truncate max-w-[130px]">
-                      {r.distrito || 'Zarcero Centro'}
+                      {r.distrito || cantonActivo}
                     </span>
                   </div>
                   <p className="text-[10px] text-slate-500 truncate mt-1">

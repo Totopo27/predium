@@ -4,35 +4,53 @@ from typing import Optional, Dict, Any, List
 from shapely.geometry import shape, MultiPolygon, Polygon
 from shapely.ops import unary_union
 from src.domain.gap_models import ResultadoGapAnalysis, VacioCatastral
+from src.domain.catastro_provider import CatastroProvider
 from src.application.gap_detector import GapDetector
-from src.infrastructure.catastro_zarcero_client import CatastroZarceroClient
+from src.infrastructure.catastro_factory import CatastroResolver
 
 
 class GapAnalysisService:
     """
     Servicio de orquestación para ejecutar el análisis de vacíos territoriales
     usando los servicios WFS oficiales y exportar los resultados a GeoJSON.
+    Soporta múltiples cantones (Zarcero, San Ramón, etc.) mediante CatastroResolver.
     """
 
     DISTRITOS_ZARCERO = ["GUADALUPE", "ZAPOTE", "PALMIRA", "ZARCERO", "LAGUNA", "TAPESCO", "BRISAS"]
+    DISTRITOS_SAN_RAMON = [
+        "SAN RAMON", "SANTIAGO", "SAN JUAN", "PIEDADES NORTE", "PIEDADES SUR",
+        "SAN RAFAEL", "SAN ISIDRO", "ANGELES", "ALFARO", "VOLIO", "CONCEPCION",
+        "ZAPOTAL", "PENAS BLANCAS", "SAN LORENZO"
+    ]
 
     def __init__(
         self,
-        catastro_client: Optional[CatastroZarceroClient] = None,
+        catastro_provider: Optional[CatastroProvider] = None,
         detector: Optional[GapDetector] = None,
     ):
-        self.catastro_client = catastro_client or CatastroZarceroClient()
+        self.catastro_provider = catastro_provider
         self.detector = detector or GapDetector()
 
+    def _resolver_proveedor(self, canton: Optional[str]) -> CatastroProvider:
+        if self.catastro_provider:
+            return self.catastro_provider
+        return CatastroResolver.obtener_proveedor(canton)
+
     def ejecutar_analisis_distrito(
-        self, distrito: str, area_minima_m2: float = 300.0, area_maxima_m2: float = 80000.0, limite_predios: int = 150
+        self,
+        distrito: str,
+        canton: str = "Zarcero",
+        area_minima_m2: float = 300.0,
+        area_maxima_m2: float = 80000.0,
+        limite_predios: int = 150,
     ) -> Optional[ResultadoGapAnalysis]:
         """
-        Ejecuta el análisis de vacíos topológicos para un distrito de Zarcero.
+        Ejecuta el análisis de vacíos topológicos para un distrito de cualquier cantón.
         Utiliza el envolvente (Convex Hull) de los predios si no hay capa distrital separada.
         Descarta polígonos que superen el área máxima de lote para evitar el perímetro rural exterior.
         """
-        predios_modelos = self.catastro_client.obtener_predios_distrito(distrito, limite=limite_predios)
+        provider = self._resolver_proveedor(canton)
+        predios_modelos = provider.obtener_predios_distrito(distrito, limite=limite_predios)
         if not predios_modelos:
             return None
 
@@ -40,12 +58,10 @@ class GapAnalysisService:
             {"finca": p.finca, "geometry": p.geometria} for p in predios_modelos
         ]
 
-        # Construir la envolvente territorial a partir de los predios analizados
         geoms = [shape(p["geometry"]) for p in predios_input if shape(p["geometry"]).is_valid]
         if not geoms:
             return None
 
-        # Convex Hull que define la zona geográfica de influencia de este grupo de predios
         envolvente_zona = unary_union(geoms).convex_hull
 
         resultado = self.detector.analizar_zona(
@@ -60,20 +76,28 @@ class GapAnalysisService:
 
     def ejecutar_analisis_canton(
         self,
+        canton: str = "Zarcero",
         distritos: Optional[List[str]] = None,
         area_minima_m2: float = 300.0,
         area_maxima_m2: float = 80000.0,
-        limite_predios_por_distrito: int = 120,
+        limite_predios_por_distrito: int = 100,
     ) -> List[VacioCatastral]:
         """
-        Recorre los distritos del cantón de Zarcero y consolida todos los vacíos
+        Recorre los distritos del cantón y consolida todos los vacíos
         catastrales detectados en una sola colección.
         """
-        lista = distritos or self.DISTRITOS_ZARCERO
+        if distritos:
+            lista = distritos
+        elif "ramon" in canton.lower() or "ramón" in canton.lower():
+            lista = self.DISTRITOS_SAN_RAMON
+        else:
+            lista = self.DISTRITOS_ZARCERO
+
         todos: List[VacioCatastral] = []
         for d in lista:
             res = self.ejecutar_analisis_distrito(
                 distrito=d,
+                canton=canton,
                 area_minima_m2=area_minima_m2,
                 area_maxima_m2=area_maxima_m2,
                 limite_predios=limite_predios_por_distrito,

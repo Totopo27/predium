@@ -10,7 +10,13 @@ interface Notificacion {
   mensaje: string;
 }
 
+const CENTROS_CANTON: Record<string, [number, number]> = {
+  Zarcero: [-84.394, 10.188],
+  'San Ramón': [-84.470, 10.088],
+};
+
 export const App: React.FC = () => {
+  const [cantonActivo, setCantonActivo] = useState('Zarcero');
   const [remates, setRemates] = useState<Remate[]>([]);
   const [rematesGeoJson, setRematesGeoJson] = useState<any>(null);
   const [vaciosGeoJson, setVaciosGeoJson] = useState<any>(null);
@@ -28,13 +34,13 @@ export const App: React.FC = () => {
     }, 5000);
   };
 
-  const cargarRemates = () => {
-    fetch('/api/remates?canton=Zarcero')
+  const cargarRemates = (canton: string = cantonActivo) => {
+    fetch(`/api/remates?canton=${canton}`)
       .then((res) => res.json())
       .then((data) => setRemates(data))
       .catch((err) => console.error('Error al cargar remates:', err));
 
-    fetch('/api/remates/geojson?canton=Zarcero')
+    fetch(`/api/remates/geojson?canton=${canton}`)
       .then((res) => res.json())
       .then((data) => {
         const reproyectado = reproyectarGeoJson(data);
@@ -43,40 +49,59 @@ export const App: React.FC = () => {
       .catch((err) => console.error('Error al cargar capa de remates:', err));
   };
 
+  const handleCambiarCanton = (nuevoCanton: string) => {
+    setCantonActivo(nuevoCanton);
+    cargarRemates(nuevoCanton);
+    setVaciosGeoJson({ type: 'FeatureCollection', features: [] });
+    setSelectedFeature(null);
+
+    // Volar al nuevo cantón
+    const centro = CENTROS_CANTON[nuevoCanton] || CENTROS_CANTON['Zarcero'];
+    setPredioBuscadoGeoJson({
+      type: 'Feature',
+      geometry: {
+        type: 'Point',
+        coordinates: centro,
+      },
+    });
+
+    mostrarNotificacion('info', `Territorio activo cambiado a: ${nuevoCanton}, Alajuela.`);
+  };
+
   const handleEscanearBoletin = async (dias: number = 15, fecha?: string) => {
     setCargandoRemates(true);
     try {
       const url = fecha
-        ? `/api/remates/escanear?canton=Zarcero&fecha=${fecha}`
-        : `/api/remates/escanear?canton=Zarcero&dias=${dias}`;
+        ? `/api/remates/escanear?canton=${cantonActivo}&fecha=${fecha}`
+        : `/api/remates/escanear?canton=${cantonActivo}&dias=${dias}`;
 
       const res = await fetch(url, { method: 'POST' });
       const data = await res.json();
-      cargarRemates();
+      cargarRemates(cantonActivo);
 
       if (data.nuevos_guardados > 0) {
         mostrarNotificacion(
           'success',
-          `Escaneo completado: ¡Se ingresaron ${data.nuevos_guardados} nuevos remates a la base de datos!`
+          `¡Se ingresaron ${data.nuevos_guardados} nuevos remates para ${cantonActivo} a la base de datos!`
         );
       } else {
         const detalle = fecha ? `Fecha ${fecha}` : `${data.dias_escaneados || dias} días analizados`;
         mostrarNotificacion(
           'info',
-          `Boletín analizado (${detalle}): No hay nuevos remates para Zarcero. Base de datos al día.`
+          `Boletín analizado (${detalle}): No hay nuevos remates para ${cantonActivo}.`
         );
       }
     } catch (err) {
       console.error('Error al escanear boletín:', err);
       mostrarNotificacion('warning', 'Error al conectar con el servidor para escanear el Boletín.');
-      cargarRemates();
+      cargarRemates(cantonActivo);
     } finally {
       setCargandoRemates(false);
     }
   };
 
   useEffect(() => {
-    cargarRemates();
+    cargarRemates('Zarcero');
   }, []);
 
   const handleBuscarFinca = async (fincaOPlano: string) => {
@@ -87,7 +112,7 @@ export const App: React.FC = () => {
           properties: {
             tipo: 'PREDIO_NO_DIGITALIZADO',
             finca: fincaOPlano,
-            distrito: 'No georreferenciado en WFS digital',
+            distrito: `No georreferenciado en WFS digital (${cantonActivo})`,
             detalles: 'Este inmueble no tiene plano digitalizado en el catastro municipal actual o es una finca antigua.',
           },
         });
@@ -107,7 +132,7 @@ export const App: React.FC = () => {
   const handleEjecutarGapAnalysis = async (distrito: string = 'TODOS') => {
     setCargandoVacios(true);
     try {
-      const res = await fetch(`/api/vacios/geojson?distrito=${distrito}&area_min=300&limite_predios=120`);
+      const res = await fetch(`/api/vacios/geojson?canton=${encodeURIComponent(cantonActivo)}&distrito=${encodeURIComponent(distrito)}&area_min=200&limite_predios=100`);
       const data = await res.json();
       const reproyectado = reproyectarGeoJson(data);
       setVaciosGeoJson(reproyectado);
@@ -193,6 +218,8 @@ export const App: React.FC = () => {
       <Sidebar
         remates={remates}
         vaciosFeatures={vaciosGeoJson?.features || []}
+        cantonActivo={cantonActivo}
+        onCambiarCanton={handleCambiarCanton}
         onSelectRemate={handleSelectRemate}
         onSelectVacio={handleSelectVacio}
         onBuscarFinca={handleBuscarFinca}

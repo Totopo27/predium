@@ -309,7 +309,7 @@ def comando_visor(args):
     if not args.no_browser:
         webbrowser.open(url)
 
-    uvicorn.run("src.api.app:app", host=host, port=puerto, reload=False)
+    uvicorn.run("src.api.app:app", host=host, port=puerto, reload=True)
 
 
 def main():

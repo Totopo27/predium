@@ -185,8 +185,35 @@ class SqliteRemateRepository(RemateRepository):
         params = []
 
         if canton:
-            query += " AND LOWER(canton) LIKE ?"
-            params.append(f"%{canton.lower()}%")
+            canton_clean = (
+                canton.lower()
+                .replace("á", "a")
+                .replace("é", "e")
+                .replace("í", "i")
+                .replace("ó", "o")
+                .replace("ú", "u")
+                .strip()
+            )
+            distritos_conocidos = []
+            if "ramon" in canton_clean:
+                distritos_conocidos = [
+                    "ramon", "penas blancas", "peñas blancas", "alfaro", "santiago",
+                    "san juan", "piedades", "san rafael", "san isidro", "angeles",
+                    "volio", "concepcion", "zapotal", "lorenzo"
+                ]
+            elif "zarcero" in canton_clean or "alfaro ruiz" in canton_clean:
+                distritos_conocidos = [
+                    "zarcero", "alfaro ruiz", "guadalupe", "zapote", "palmira",
+                    "laguna", "tapesco", "brisas", "anateri"
+                ]
+
+            condiciones = ["LOWER(canton) LIKE ?"]
+            params.append(f"%{canton_clean}%")
+            for d in distritos_conocidos:
+                condiciones.append("LOWER(distrito) LIKE ?")
+                params.append(f"%{d}%")
+
+            query += f" AND ({' OR '.join(condiciones)})"
 
         if estado:
             query += " AND estado = ?"
