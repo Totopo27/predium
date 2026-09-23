@@ -43,12 +43,14 @@ export const App: React.FC = () => {
       .catch((err) => console.error('Error al cargar capa de remates:', err));
   };
 
-  const handleEscanearBoletin = async () => {
+  const handleEscanearBoletin = async (dias: number = 15, fecha?: string) => {
     setCargandoRemates(true);
     try {
-      const res = await fetch('/api/remates/escanear?canton=Zarcero&dias=5', {
-        method: 'POST',
-      });
+      const url = fecha
+        ? `/api/remates/escanear?canton=Zarcero&fecha=${fecha}`
+        : `/api/remates/escanear?canton=Zarcero&dias=${dias}`;
+
+      const res = await fetch(url, { method: 'POST' });
       const data = await res.json();
       cargarRemates();
 
@@ -58,9 +60,10 @@ export const App: React.FC = () => {
           `Escaneo completado: ¡Se ingresaron ${data.nuevos_guardados} nuevos remates a la base de datos!`
         );
       } else {
+        const detalle = fecha ? `Fecha ${fecha}` : `${data.dias_escaneados || dias} días analizados`;
         mostrarNotificacion(
           'info',
-          `Boletín analizado (${data.dias_escaneados || 5} días): No hay nuevos remates para Zarcero. Base de datos al día.`
+          `Boletín analizado (${detalle}): No hay nuevos remates para Zarcero. Base de datos al día.`
         );
       }
     } catch (err) {

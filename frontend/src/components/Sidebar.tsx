@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, MapPin, AlertTriangle, Building, Flame, Layers, Sparkles, HelpCircle, Eye, RefreshCw } from 'lucide-react';
+import { Search, MapPin, AlertTriangle, Building, Flame, Layers, Sparkles, HelpCircle, Eye, RefreshCw, Calendar, Clock } from 'lucide-react';
 import type { Remate } from '../types';
 
 interface SidebarProps {
@@ -9,7 +9,7 @@ interface SidebarProps {
   onSelectVacio: (vacioFeature: any) => void;
   onBuscarFinca: (fincaOPlano: string) => void;
   onEjecutarGapAnalysis: (distrito: string) => void;
-  onEscanearBoletin: () => void;
+  onEscanearBoletin: (dias: number, fecha?: string) => void;
   cargandoRemates: boolean;
   cargandoVacios: boolean;
   totalVacios: number;
@@ -30,11 +30,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [terminoBusqueda, setTerminoBusqueda] = useState('');
   const [filtroRemates, setFiltroRemates] = useState('');
   const [distritoSeleccionado, setDistritoSeleccionado] = useState('TODOS');
+  
+  // Parámetros de Escaneo de Boletín
+  const [modoEscaneo, setModoEscaneo] = useState<'dias' | 'fecha'>('dias');
+  const [diasEscaneo, setDiasEscaneo] = useState<number>(15);
+  const [fechaHistorica, setFechaHistorica] = useState<string>('');
+  const [mostrarConfigEscaneo, setMostrarConfigEscaneo] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (terminoBusqueda.trim()) {
       onBuscarFinca(terminoBusqueda.trim());
+    }
+  };
+
+  const handleLanzarEscaneo = () => {
+    if (modoEscaneo === 'fecha' && fechaHistorica) {
+      onEscanearBoletin(1, fechaHistorica);
+    } else {
+      onEscanearBoletin(diasEscaneo);
     }
   };
 
@@ -93,7 +107,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </form>
 
       {/* Acciones Rápidas: Detectar Vacíos & Escanear Boletín */}
-      <div className="p-4 border-b border-slate-800/80 space-y-2.5">
+      <div className="p-4 border-b border-slate-800/80 space-y-3">
+        {/* BLOQUE VACÍOS */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Distrito a Analizar</label>
@@ -130,19 +145,92 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        <button
-          onClick={onEscanearBoletin}
-          disabled={cargandoRemates}
-          className="w-full bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-between transition group"
-        >
-          <div className="flex items-center space-x-2">
-            <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 transition ${cargandoRemates ? 'animate-spin' : 'group-hover:rotate-45'}`} />
-            <span>{cargandoRemates ? 'Escaneando Boletín...' : 'Escanear Boletín'}</span>
+        {/* BLOQUE ESCANEO BOLETÍN CON CONFIGURACIÓN */}
+        <div className="space-y-1.5 pt-1 border-t border-slate-800/60">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Escaneo de Remates</span>
+            <button
+              onClick={() => setMostrarConfigEscaneo(!mostrarConfigEscaneo)}
+              className="text-[10px] text-cyan-400 hover:text-cyan-300 underline font-medium"
+            >
+              {mostrarConfigEscaneo ? 'Ocultar opciones' : 'Ajustar periodo / fecha'}
+            </button>
           </div>
-          <span className="bg-cyan-500/20 text-cyan-300 text-[10px] px-2 py-0.5 rounded-full font-bold">
-            {remates.length} remates
-          </span>
-        </button>
+
+          {mostrarConfigEscaneo && (
+            <div className="p-2.5 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2 text-xs">
+              <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setModoEscaneo('dias')}
+                  className={`flex-1 py-1 rounded font-semibold transition ${
+                    modoEscaneo === 'dias' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Días Recientes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModoEscaneo('fecha')}
+                  className={`flex-1 py-1 rounded font-semibold transition ${
+                    modoEscaneo === 'fecha' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Fecha Histórica
+                </button>
+              </div>
+
+              {modoEscaneo === 'dias' ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-[11px] flex items-center space-x-1">
+                    <Clock className="w-3 h-3 text-slate-500" />
+                    <span>Días hábiles atrás:</span>
+                  </span>
+                  <select
+                    value={diasEscaneo}
+                    onChange={(e) => setDiasEscaneo(Number(e.target.value))}
+                    className="bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                  >
+                    <option value={5}>5 días</option>
+                    <option value={15}>15 días</option>
+                    <option value={30}>30 días (1 mes)</option>
+                    <option value={60}>60 días (2 meses)</option>
+                    <option value={90}>90 días (3 meses)</option>
+                  </select>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <span className="text-slate-400 text-[11px] flex items-center space-x-1">
+                    <Calendar className="w-3 h-3 text-slate-500" />
+                    <span>Fecha de publicación:</span>
+                  </span>
+                  <input
+                    type="date"
+                    value={fechaHistorica}
+                    onChange={(e) => setFechaHistorica(e.target.value)}
+                    placeholder="YYYY-MM-DD"
+                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                  />
+                  <p className="text-[10px] text-slate-500 italic">Ej: 2023-08-21 para consultar ediciones pasadas.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={handleLanzarEscaneo}
+            disabled={cargandoRemates}
+            className="w-full bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-between transition group"
+          >
+            <div className="flex items-center space-x-2">
+              <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 transition ${cargandoRemates ? 'animate-spin' : 'group-hover:rotate-45'}`} />
+              <span>{cargandoRemates ? 'Escaneando Boletín...' : 'Escanear Boletín'}</span>
+            </div>
+            <span className="bg-cyan-500/20 text-cyan-300 text-[10px] px-2 py-0.5 rounded-full font-bold">
+              {remates.length} remates
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Lista con Scroll: Vacíos + Remates */}
@@ -205,9 +293,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </label>
             <div className="flex items-center space-x-1.5">
               <button
-                onClick={onEscanearBoletin}
+                onClick={() => onEscanearBoletin(diasEscaneo)}
                 disabled={cargandoRemates}
-                title="Escanear remates del Boletín Judicial"
+                title="Actualizar lista de remates"
                 className="text-slate-400 hover:text-cyan-400 p-1 rounded-lg hover:bg-slate-800 transition"
               >
                 <RefreshCw className={`w-3 h-3 ${cargandoRemates ? 'animate-spin text-cyan-400' : ''}`} />
