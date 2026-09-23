@@ -1,0 +1,14 @@
+# Core & HTTP
+httpx>=0.27.0
+beautifulsoup4>=4.12.0
+lxml>=5.1.0
+
+# Data modeling & validation
+pydantic>=2.7.0
+
+# API (Next step)
+fastapi>=0.110.0
+uvicorn>=0.29.0
+
+# Testing
+pytest>=8.0.0
