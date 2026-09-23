@@ -7,11 +7,13 @@ from src.application.export_service import ExportService
 from src.application.georreferenciar_service import GeorreferenciarService
 from src.application.gap_analysis_service import GapAnalysisService
 from src.application.diagnostico_patrimonial_service import DiagnosticoPatrimonialService
+from src.application.orchestrator_service import OrchestratorService
 from src.infrastructure.sqlite_repository import SqliteRemateRepository
 from src.infrastructure.catastro_zarcero_client import CatastroZarceroClient
 from src.infrastructure.registro_nacional_client import RegistroNacionalClient
 from src.infrastructure.rnp_scraper_client import RnpScraperClient
 from src.infrastructure.laya_triage_client import LayaTriageClient
+from src.infrastructure.scheduler import IngestaWorker
 from src.domain.registro_models import TitularFinca, TipoPersona, Gravamen, GravamenTipo, EstadoSociedad
 
 # Asegurar UTF-8 en salida estándar para consolas de Windows
@@ -259,6 +261,37 @@ def comando_triage(args):
     print("-" * 50)
 
 
+def comando_worker(args):
+    orchestrator = OrchestratorService()
+
+    if args.catchup:
+        print(f"\n[ORQUESTADOR] Iniciando catch-up retrospectivo de {args.catchup} dias para {args.canton}...")
+        logs = orchestrator.ejecutar_catchup(dias_atras=args.catchup, canton=args.canton)
+        print(f"\n[OK] Catch-up completado. Total de dias procesados: {len(logs)}")
+        for l in logs:
+            print(f"   - {l.fecha_boletin}: {l.estado} (Nuevos en BD: {l.nuevos_guardados_bd}, Alertas: {l.alertas_emitidas})")
+        return
+
+    if args.ejecutar_ahora:
+        print(f"\n[ORQUESTADOR] Ejecutando sincronizacion inmediata para {args.canton}...")
+        log = orchestrator.ejecutar_ciclo_fecha(fecha=date.today(), canton=args.canton)
+        print(f"\n[OK] Ciclo terminado con estado: {log.estado}")
+        print(f"   - Nuevos en BD:         {log.nuevos_guardados_bd}")
+        print(f"   - Georreferenciados:    {log.georreferenciados_catastro}")
+        print(f"   - Alertas de Oportunidad: {log.alertas_emitidas}")
+        if log.alertas:
+            for a in log.alertas:
+                print(f"     🚨 [{a.prioridad}] {a.tipo_alerta}: {a.detalles}")
+        return
+
+    worker = IngestaWorker(
+        orchestrator=orchestrator,
+        cantones=[args.canton],
+        intervalo_horas=args.intervalo,
+    )
+    worker.iniciar_bucle()
+
+
 def comando_visor(args):
     import uvicorn
 
@@ -343,6 +376,14 @@ def main():
     parser_triage = subparsers.add_parser("triage", help="Ejecuta el triage de Sistema 1 sobre el texto de un edicto")
     parser_triage.add_argument("--texto", type=str, required=True, help="Texto del edicto para clasificar")
     parser_triage.set_defaults(func=comando_triage)
+
+    # Subcomando: worker
+    parser_worker = subparsers.add_parser("worker", help="Orquestador autonomo de ingesta y alertas")
+    parser_worker.add_argument("--canton", type=str, default="Zarcero", help="Canton objetivo (default: Zarcero)")
+    parser_worker.add_argument("--intervalo", type=float, default=6.0, help="Intervalo de ejecucion en horas (default: 6.0)")
+    parser_worker.add_argument("--ejecutar-ahora", action="store_true", help="Ejecuta una ronda de sincronizacion inmediata y termina")
+    parser_worker.add_argument("--catchup", type=int, help="Ejecuta un catch-up retrospectivo de N dias habiles hacia atras")
+    parser_worker.set_defaults(func=comando_worker)
 
     # Subcomando: visor
     parser_visor = subparsers.add_parser("visor", help="Levanta el Visor Web Interactivo en el navegador")
