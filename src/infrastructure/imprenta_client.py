@@ -54,7 +54,8 @@ class ImprentaNacionalClient:
         try:
             response = self.client.get(url)
             if response.status_code == 200:
-                response.encoding = response.apparent_encoding or "latin-1"
+                # Detectar codificación o fallback a latin-1/windows-1252 típica de la Imprenta Nacional
+                response.encoding = response.charset_encoding or "latin-1"
                 contenido = response.text
                 # Guardar en caché
                 if ruta_cache:
