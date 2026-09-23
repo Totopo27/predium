@@ -366,31 +366,7 @@ export const MapView: React.FC<MapProps> = ({
             centrarEnCoords(coords, 16);
           }
 
-          // Popup indicador sobre el polígono
           if (popupRef.current) popupRef.current.remove();
-
-          const titulo = props.id_vacio || (props.folio_real ? `Remate ${props.folio_real}` : `Finca ${props.finca || ''}`);
-          const subtitulo = props.area_m2 ? `${Number(props.area_m2).toLocaleString()} m²` : props.monto_base || '';
-
-          let centroLngLat: [number, number] = [-84.394, 10.188];
-          const primerPunto = (c: any) => {
-            if (typeof c[0] === 'number') {
-              centroLngLat = [c[0], c[1]];
-            } else if (Array.isArray(c) && c.length > 0) {
-              primerPunto(c[0]);
-            }
-          };
-          primerPunto(coords);
-
-          popupRef.current = new maplibregl.Popup({ closeButton: false, offset: 15 })
-            .setLngLat(centroLngLat)
-            .setHTML(`
-              <div style="color: #020617; font-family: sans-serif; font-size: 11px; padding: 2px;">
-                <strong style="display: block; color: #b45309;">${titulo}</strong>
-                <span>${subtitulo}</span>
-              </div>
-            `)
-            .addTo(map);
         } else {
           srcSelected.setData({ type: 'FeatureCollection', features: [] });
           if (srcColindantes) srcColindantes.setData({ type: 'FeatureCollection', features: [] });
