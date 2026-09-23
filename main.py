@@ -1,5 +1,6 @@
 import argparse
 import sys
+import webbrowser
 from datetime import date, datetime, timedelta
 from src.application.cazar_remates_service import CazarRematesService
 from src.application.export_service import ExportService
@@ -176,7 +177,6 @@ def comando_diagnosticar(args):
 
     client = RegistroNacionalClient()
 
-    # Si se pasa flag de simulación para verificar escenarios
     titular = None
     estado_soc = EstadoSociedad.NO_APLICA
     gravamenes = []
@@ -231,6 +231,26 @@ def comando_diagnosticar(args):
     print(f"\nEstrategia Sugerida:      *** {diag.estrategia_sugerida.value} ***")
     print(f"Dictamen Tecnico:         {diag.diagnostico_resumen}")
     print("-" * 50)
+
+
+def comando_visor(args):
+    import uvicorn
+
+    host = args.host
+    puerto = args.puerto
+    url = f"http://{host}:{puerto}"
+
+    print("\n" + "=" * 55)
+    print("🚀 INICIANDO VISOR WEB buscaCatastro")
+    print("=" * 55)
+    print(f"🌐 Servidor activo en:    {url}")
+    print(f"📚 Documentacion API:     {url}/docs")
+    print("Presiona Ctrl+C en esta terminal para detener el servidor.\n")
+
+    if not args.no_browser:
+        webbrowser.open(url)
+
+    uvicorn.run("src.api.app:app", host=host, port=puerto, reload=False)
 
 
 def main():
@@ -291,6 +311,13 @@ def main():
         help="Escenario de prueba para evaluar estrategia",
     )
     parser_diag.set_defaults(func=comando_diagnosticar)
+
+    # Subcomando: visor
+    parser_visor = subparsers.add_parser("visor", help="Levanta el Visor Web Interactivo en el navegador")
+    parser_visor.add_argument("--puerto", type=int, default=8000, help="Puerto HTTP local (default: 8000)")
+    parser_visor.add_argument("--host", type=str, default="127.0.0.1", help="Host local (default: 127.0.0.1)")
+    parser_visor.add_argument("--no-browser", action="store_true", help="No abrir el navegador automaticamente")
+    parser_visor.set_defaults(func=comando_visor)
 
     args = parser.parse_args()
     args.func(args)
