@@ -1,12 +1,12 @@
 import httpx
 from typing import Optional, List, Dict, Any
 from src.domain.gis_models import PredioCatastral
+from src.domain.catastro_provider import CatastroProvider
 
 
-class CatastroZarceroClient:
+class CatastroZarceroClient(CatastroProvider):
     """
-    Cliente WFS (Web Feature Service) oficial para la Municipalidad de Zarcero.
-    Consume directamente las capas catastrales georreferenciadas.
+    Proveedor WFS oficial para la Municipalidad de Zarcero (Nivel 1: Alta Resolución).
     """
 
     BASE_WFS_URL = "https://visorcatastral.zarcero.go.cr/mapas/zarcero/wfs"
@@ -14,7 +14,7 @@ class CatastroZarceroClient:
     def __init__(self, timeout: float = 20.0):
         self.client = httpx.Client(
             timeout=timeout,
-            verify=False,  # En entornos locales/gubernamentales los certs a veces tienen cadenas intermedias
+            verify=False,
             headers={
                 "User-Agent": "buscaCatastro-Engine/1.0"
             },
@@ -58,9 +58,6 @@ class CatastroZarceroClient:
         )
 
     def buscar_por_finca(self, numero_finca: str) -> Optional[PredioCatastral]:
-        """
-        Busca un predio en Zarcero por su número de finca (admite ceros iniciales o sin ceros).
-        """
         finca_limpia = numero_finca.strip().lstrip("0")
         cql = f"finca LIKE '%{finca_limpia}%'"
         try:
@@ -73,7 +70,6 @@ class CatastroZarceroClient:
             return None
 
     def buscar_por_plano(self, numero_plano: str) -> Optional[PredioCatastral]:
-        """Busca un predio en Zarcero por su número de plano catastrado."""
         plano_limpio = numero_plano.replace("-", "").strip()
         cql = f"plano LIKE '%{plano_limpio}%'"
         try:
@@ -86,7 +82,6 @@ class CatastroZarceroClient:
             return None
 
     def obtener_predios_distrito(self, distrito: str, limite: int = 100) -> List[PredioCatastral]:
-        """Descarga un lote de predios pertenecientes a un distrito específico."""
         distrito_upper = distrito.strip().upper()
         cql = f"n_distrito = '{distrito_upper}'"
         try:

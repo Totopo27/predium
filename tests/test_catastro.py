@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock
 from src.domain.gis_models import PredioCatastral
 from src.domain.models import EdictoRemate, IdentificadorRegistral, UbicacionFinca, BaseRemate, Moneda
-from src.infrastructure.catastro_zarcero_client import CatastroZarceroClient
+from src.domain.catastro_provider import CatastroProvider
 from src.application.georreferenciar_service import GeorreferenciarService
 
 
@@ -25,10 +25,10 @@ def predio_mock():
 
 
 def test_georreferenciar_edicto_por_finca(predio_mock):
-    mock_client = MagicMock(spec=CatastroZarceroClient)
+    mock_client = MagicMock(spec=CatastroProvider)
     mock_client.buscar_por_finca.return_value = predio_mock
 
-    service = GeorreferenciarService(catastro_client=mock_client)
+    service = GeorreferenciarService(catastro_provider=mock_client)
 
     edicto = EdictoRemate(
         id_edicto="IN123",
@@ -48,12 +48,11 @@ def test_georreferenciar_edicto_por_finca(predio_mock):
 
 
 def test_georreferenciar_edicto_por_plano_fallback(predio_mock):
-    mock_client = MagicMock(spec=CatastroZarceroClient)
-    # No se encuentra por finca, pero sí por plano
+    mock_client = MagicMock(spec=CatastroProvider)
     mock_client.buscar_por_finca.return_value = None
     mock_client.buscar_por_plano.return_value = predio_mock
 
-    service = GeorreferenciarService(catastro_client=mock_client)
+    service = GeorreferenciarService(catastro_provider=mock_client)
 
     edicto = EdictoRemate(
         id_edicto="IN456",
