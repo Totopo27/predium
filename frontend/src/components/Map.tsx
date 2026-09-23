@@ -200,6 +200,23 @@ export const MapView: React.FC<MapProps> = ({
     const src = map.getSource('vacios-source') as maplibregl.GeoJSONSource;
     if (src && vaciosGeoJson) {
       src.setData(vaciosGeoJson);
+
+      // Si hay vacíos detectados, volar automáticamente a su ubicación
+      const features = vaciosGeoJson.features;
+      if (features && features.length > 0) {
+        const bounds = new maplibregl.LngLatBounds();
+        const recorrer = (c: any) => {
+          if (typeof c[0] === 'number') {
+            bounds.extend([c[0], c[1]]);
+          } else {
+            c.forEach(recorrer);
+          }
+        };
+        features.forEach((f: any) => {
+          if (f.geometry?.coordinates) recorrer(f.geometry.coordinates);
+        });
+        map.fitBounds(bounds, { padding: 80, maxZoom: 16, pitch: 45, duration: 1500 });
+      }
     }
   }, [vaciosGeoJson]);
 

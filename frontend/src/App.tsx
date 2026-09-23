@@ -52,6 +52,10 @@ export const App: React.FC = () => {
       const data = await res.json();
       const reproyectado = reproyectarGeoJson(data);
       setVaciosGeoJson(reproyectado);
+      if (reproyectado?.features && reproyectado.features.length > 0) {
+        // Abrir automáticamente la ficha técnica del primer vacío encontrado
+        setSelectedFeature(reproyectado.features[0]);
+      }
     } catch (err) {
       alert('Error al ejecutar el análisis de vacíos topológicos.');
     } finally {
@@ -66,11 +70,19 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleSelectVacio = (vacioFeature: any) => {
+    setSelectedFeature(vacioFeature);
+    // Asignar a predioBuscadoGeoJson para que el mapa haga flyTo a sus coordenadas
+    setPredioBuscadoGeoJson(vacioFeature);
+  };
+
   return (
     <div className="flex w-screen h-screen overflow-hidden bg-slate-950 font-sans">
       <Sidebar
         remates={remates}
+        vaciosFeatures={vaciosGeoJson?.features || []}
         onSelectRemate={handleSelectRemate}
+        onSelectVacio={handleSelectVacio}
         onBuscarFinca={handleBuscarFinca}
         onEjecutarGapAnalysis={handleEjecutarGapAnalysis}
         cargandoVacios={cargandoVacios}
