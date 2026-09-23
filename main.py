@@ -10,6 +10,7 @@ from src.application.diagnostico_patrimonial_service import DiagnosticoPatrimoni
 from src.infrastructure.sqlite_repository import SqliteRemateRepository
 from src.infrastructure.catastro_zarcero_client import CatastroZarceroClient
 from src.infrastructure.registro_nacional_client import RegistroNacionalClient
+from src.infrastructure.rnp_scraper_client import RnpScraperClient
 from src.domain.registro_models import TitularFinca, TipoPersona, Gravamen, GravamenTipo, EstadoSociedad
 
 # Asegurar UTF-8 en salida estándar para consolas de Windows
@@ -175,56 +176,63 @@ def comando_diagnosticar(args):
     folio = args.folio
     print(f"\n[RNP] Ejecutando diagnostico patrimonial para Folio Real: {folio}...")
 
-    client = RegistroNacionalClient()
+    # Si se pasa un archivo HTML real del RNP descargado
+    if args.archivo:
+        scraper = RnpScraperClient()
+        print(f"      Procesando archivo registral: {args.archivo}...")
+        diag = scraper.parsear_archivo_html(args.archivo, folio_real=folio)
+    else:
+        client = RegistroNacionalClient()
+        titular = None
+        estado_soc = EstadoSociedad.NO_APLICA
+        gravamenes = []
 
-    titular = None
-    estado_soc = EstadoSociedad.NO_APLICA
-    gravamenes = []
-
-    if args.escenario == "sociedad_disuelta":
-        titular = TitularFinca(
-            nombre="Desarrollos del Norte S.A.",
-            cedula="3-101-445566",
-            tipo=TipoPersona.JURIDICA,
-        )
-        estado_soc = EstadoSociedad.DISUELTA_POR_LEY_9428
-    elif args.escenario == "usufructo":
-        titular = TitularFinca(
-            nombre="Don Jorge V. (Adulto Mayor)",
-            cedula="2-0111-0222",
-            tipo=TipoPersona.FISICA,
-        )
-        gravamenes.append(
-            Gravamen(
-                tipo=GravamenTipo.USUFRUCTO,
-                descripcion="Usufructo vitalicio a favor de Don Jorge",
+        if args.escenario == "sociedad_disuelta":
+            titular = TitularFinca(
+                nombre="Desarrollos del Norte S.A.",
+                cedula="3-101-445566",
+                tipo=TipoPersona.JURIDICA,
             )
-        )
-    elif args.escenario == "remate":
-        titular = TitularFinca(
-            nombre="Inversiones Alfa",
-            cedula="3-101-778899",
-            tipo=TipoPersona.JURIDICA,
-        )
-        gravamenes.append(
-            Gravamen(
-                tipo=GravamenTipo.EMBARGO,
-                descripcion="Embargo judicial cobratorio",
-                monto=25000000.0,
+            estado_soc = EstadoSociedad.DISUELTA_POR_LEY_9428
+        elif args.escenario == "usufructo":
+            titular = TitularFinca(
+                nombre="Don Jorge V. (Adulto Mayor)",
+                cedula="2-0111-0222",
+                tipo=TipoPersona.FISICA,
             )
-        )
+            gravamenes.append(
+                Gravamen(
+                    tipo=GravamenTipo.USUFRUCTO,
+                    descripcion="Usufructo vitalicio a favor de Don Jorge",
+                )
+            )
+        elif args.escenario == "remate":
+            titular = TitularFinca(
+                nombre="Inversiones Alfa",
+                cedula="3-101-778899",
+                tipo=TipoPersona.JURIDICA,
+            )
+            gravamenes.append(
+                Gravamen(
+                    tipo=GravamenTipo.EMBARGO,
+                    descripcion="Embargo judicial cobratorio",
+                    monto=25000000.0,
+                )
+            )
 
-    diag = client.obtener_estudio_finca(
-        folio_real=folio,
-        titular_simulado=titular,
-        gravamenes_simulados=gravamenes,
-        estado_sociedad=estado_soc,
-    )
+        diag = client.obtener_estudio_finca(
+            folio_real=folio,
+            titular_simulado=titular,
+            gravamenes_simulados=gravamenes,
+            estado_sociedad=estado_soc,
+        )
 
     print("\n--- INFORME DE DIAGNOSTICO JURIDICO ---")
     print(f"Folio Real:               {diag.folio_real}")
-    print(f"Titular:                  {diag.titulares[0].nombre} ({diag.titulares[0].cedula})")
-    print(f"Tipo Titular:             {diag.titulares[0].tipo.value}")
+    if diag.titulares:
+        print(f"Titular:                  {diag.titulares[0].nombre} ({diag.titulares[0].cedula})")
+        print(f"Tipo Titular:             {diag.titulares[0].tipo.value}")
+    print(f"Gravámenes detectados:    {len(diag.gravamenes)}")
     print(f"Alerta Sociedad Disuelta: {'SI (Ley 9428)' if diag.alerta_sociedad_disuelta else 'NO'}")
     print(f"Alerta Usufructo Activo:  {'SI' if diag.alerta_usufructo_activo else 'NO'}")
     print(f"Alerta Embargos:          {'SI' if diag.alerta_embargos_judiciales else 'NO'}")
@@ -308,8 +316,9 @@ def main():
         type=str,
         default="sociedad_disuelta",
         choices=["sociedad_disuelta", "usufructo", "remate", "regular"],
-        help="Escenario de prueba para evaluar estrategia",
+        help="Escenario simulado si no se provee archivo",
     )
+    parser_diag.add_argument("--archivo", type=str, help="Ruta a archivo HTML de consulta RNP para parseo real")
     parser_diag.set_defaults(func=comando_diagnosticar)
 
     # Subcomando: visor
