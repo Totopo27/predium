@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as maplibregl from 'maplibre-gl';
-import { Layers, Compass } from 'lucide-react';
+import { Compass } from 'lucide-react';
 
 interface MapProps {
   rematesGeoJson: any;
@@ -8,7 +8,7 @@ interface MapProps {
   predioBuscadoGeoJson: any;
   onSelectFeature: (feature: any) => void;
   tipoMapa: 'satelite' | 'calles';
-  onToggleTipoMapa: () => void;
+  onSetTipoMapa: (tipo: 'satelite' | 'calles') => void;
 }
 
 export const MapView: React.FC<MapProps> = ({
@@ -17,7 +17,7 @@ export const MapView: React.FC<MapProps> = ({
   predioBuscadoGeoJson,
   onSelectFeature,
   tipoMapa,
-  onToggleTipoMapa,
+  onSetTipoMapa,
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -180,24 +180,36 @@ export const MapView: React.FC<MapProps> = ({
     };
   }, []);
 
-  // Conmutador directo de visibilidad entre satélite y calles
+  // Conmutador instantáneo y determinista entre satélite y calles
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map) return;
 
-    if (map.getLayer('capa-satelite')) {
-      map.setLayoutProperty(
-        'capa-satelite',
-        'visibility',
-        tipoMapa === 'satelite' ? 'visible' : 'none'
-      );
-    }
-    if (map.getLayer('capa-calles')) {
-      map.setLayoutProperty(
-        'capa-calles',
-        'visibility',
-        tipoMapa === 'calles' ? 'visible' : 'none'
-      );
+    const aplicar = () => {
+      try {
+        if (map.getLayer('capa-satelite')) {
+          map.setLayoutProperty(
+            'capa-satelite',
+            'visibility',
+            tipoMapa === 'satelite' ? 'visible' : 'none'
+          );
+        }
+        if (map.getLayer('capa-calles')) {
+          map.setLayoutProperty(
+            'capa-calles',
+            'visibility',
+            tipoMapa === 'calles' ? 'visible' : 'none'
+          );
+        }
+      } catch (e) {
+        // En caso de que el estilo esté en transición
+      }
+    };
+
+    if (map.loaded()) {
+      aplicar();
+    } else {
+      map.once('load', aplicar);
     }
   }, [tipoMapa]);
 
@@ -265,16 +277,33 @@ export const MapView: React.FC<MapProps> = ({
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
 
-      {/* Controles flotantes de capas y perspectiva */}
+      {/* Controles flotantes superiores */}
       <div className="absolute top-5 left-5 z-10 flex space-x-2">
-        <button
-          onClick={onToggleTipoMapa}
-          className="flex items-center space-x-2 px-3.5 py-2 bg-slate-900/90 hover:bg-slate-800 text-slate-100 rounded-xl border border-slate-700/80 shadow-xl backdrop-blur-md text-xs font-semibold transition"
-        >
-          <Layers className="w-3.5 h-3.5 text-cyan-400" />
-          <span>{tipoMapa === 'satelite' ? 'Ver Calles' : 'Ver Satélite'}</span>
-        </button>
+        {/* Toggle con dos botones claros: Satélite | Calles */}
+        <div className="flex bg-slate-900/90 rounded-xl border border-slate-700/80 p-0.5 shadow-xl backdrop-blur-md">
+          <button
+            onClick={() => onSetTipoMapa('satelite')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              tipoMapa === 'satelite'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Satélite
+          </button>
+          <button
+            onClick={() => onSetTipoMapa('calles')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              tipoMapa === 'calles'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Calles
+          </button>
+        </div>
 
+        {/* Botón de alternar inclinación 2.5D */}
         <button
           onClick={() => {
             const map = mapRef.current;
@@ -283,10 +312,10 @@ export const MapView: React.FC<MapProps> = ({
               map.easeTo({ pitch: currentPitch > 10 ? 0 : 55, duration: 800 });
             }
           }}
-          className="flex items-center space-x-2 px-3.5 py-2 bg-slate-900/90 hover:bg-slate-800 text-slate-100 rounded-xl border border-slate-700/80 shadow-xl backdrop-blur-md text-xs font-semibold transition"
+          className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-slate-800 text-slate-100 rounded-xl border border-slate-700/80 shadow-xl backdrop-blur-md text-xs font-semibold transition"
         >
           <Compass className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Alternar 2.5D</span>
+          <span>Vista 2.5D</span>
         </button>
       </div>
     </div>

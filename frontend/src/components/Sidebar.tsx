@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, MapPin, AlertTriangle, Building, Flame, Layers, Sparkles, HelpCircle } from 'lucide-react';
+import { Search, MapPin, AlertTriangle, Building, Flame, Layers, Sparkles, HelpCircle, Eye, RefreshCw } from 'lucide-react';
 import type { Remate } from '../types';
 
 interface SidebarProps {
@@ -9,6 +9,8 @@ interface SidebarProps {
   onSelectVacio: (vacioFeature: any) => void;
   onBuscarFinca: (fincaOPlano: string) => void;
   onEjecutarGapAnalysis: () => void;
+  onEscanearBoletin: () => void;
+  cargandoRemates: boolean;
   cargandoVacios: boolean;
   totalVacios: number;
 }
@@ -20,10 +22,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectVacio,
   onBuscarFinca,
   onEjecutarGapAnalysis,
+  onEscanearBoletin,
+  cargandoRemates,
   cargandoVacios,
   totalVacios,
 }) => {
   const [terminoBusqueda, setTerminoBusqueda] = useState('');
+  const [filtroRemates, setFiltroRemates] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +36,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       onBuscarFinca(terminoBusqueda.trim());
     }
   };
+
+  const rematesFiltrados = remates.filter((r) => {
+    if (!filtroRemates.trim()) return true;
+    const q = filtroRemates.toLowerCase();
+    return (
+      r.folio_real.toLowerCase().includes(q) ||
+      (r.acreedor && r.acreedor.toLowerCase().includes(q)) ||
+      (r.distrito && r.distrito.toLowerCase().includes(q)) ||
+      (r.plano && r.plano.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <aside className="w-96 h-screen bg-slate-950/85 backdrop-blur-xl border-r border-slate-800/80 flex flex-col z-20 shadow-2xl">
@@ -75,7 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </form>
 
-      {/* Acciones Rápidas de Inteligencia */}
+      {/* Acciones Rápidas: Detectar Vacíos */}
       <div className="p-4 border-b border-slate-800/80 space-y-2">
         <button
           onClick={onEjecutarGapAnalysis}
@@ -84,7 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <div className="flex items-center space-x-2">
             <Sparkles className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-12 transition" />
-            <span>{cargandoVacios ? 'Calculando vacíos...' : 'Detectar Vacíos (Gap Analysis)'}</span>
+            <span>{cargandoVacios ? 'Calculando vacíos...' : 'Detectar Vacíos'}</span>
           </div>
           {totalVacios > 0 && (
             <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-bold">
@@ -96,7 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Lista con Scroll: Vacíos + Remates */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* SECCIÓN VACÍOS DETECTADOS (Si existen) */}
+        {/* SECCIÓN VACÍOS DETECTADOS */}
         {vaciosFeatures && vaciosFeatures.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -122,8 +138,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <span className="font-bold text-xs text-amber-300 group-hover:text-amber-200 transition">
                         {p.id_vacio || `Vacío #${idx + 1}`}
                       </span>
-                      <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold border border-amber-500/30">
-                        Vacío Catastral
+                      <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold border border-amber-500/30 flex items-center space-x-1">
+                        <Eye className="w-2.5 h-2.5" />
+                        <span>Ver en mapa</span>
                       </span>
                     </div>
                     <div className="flex items-baseline justify-between mt-1">
@@ -145,25 +162,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {/* SECCIÓN REMATES JUDICIALES Y MUNICIPALES */}
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           <div className="flex items-center justify-between">
             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
               <Layers className="w-3 h-3 text-cyan-400" />
               <span>Remates Judiciales y Municipales</span>
             </label>
-            <span className="text-[10px] bg-slate-800/80 text-slate-400 px-2 py-0.5 rounded-full font-semibold">
-              {remates.length}
-            </span>
+            <div className="flex items-center space-x-1.5">
+              <button
+                onClick={onEscanearBoletin}
+                disabled={cargandoRemates}
+                title="Escanear remates del Boletín Judicial"
+                className="text-slate-400 hover:text-cyan-400 p-1 rounded-lg hover:bg-slate-800 transition"
+              >
+                <RefreshCw className={`w-3 h-3 ${cargandoRemates ? 'animate-spin text-cyan-400' : ''}`} />
+              </button>
+              <span className="text-[10px] bg-slate-800/80 text-slate-400 px-2 py-0.5 rounded-full font-semibold">
+                {rematesFiltrados.length}
+              </span>
+            </div>
           </div>
 
-          {remates.length === 0 ? (
+          {/* Filtro rápido de remates */}
+          <div className="relative">
+            <input
+              type="text"
+              value={filtroRemates}
+              onChange={(e) => setFiltroRemates(e.target.value)}
+              placeholder="Filtrar por acreedor o folio..."
+              className="w-full bg-slate-900/60 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-cyan-500 text-slate-200 placeholder-slate-500"
+            />
+          </div>
+
+          {rematesFiltrados.length === 0 ? (
             <div className="text-center py-6 text-slate-500 space-y-2">
               <AlertTriangle className="w-5 h-5 mx-auto text-slate-600" />
-              <p className="text-xs">No hay remates activos en la base de datos.</p>
+              <p className="text-xs">No se encontraron remates coincidentes.</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {remates.map((r, i) => (
+              {rematesFiltrados.map((r, i) => (
                 <div
                   key={i}
                   onClick={() => onSelectRemate(r)}

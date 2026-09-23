@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
-import { X, Scale, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { X, Scale, ShieldAlert, CheckCircle2, LocateFixed, HelpCircle } from 'lucide-react';
 import type { DiagnosticoPatrimonial } from '../types';
 
 interface PropertyDetailProps {
   featureData: any;
   onClose: () => void;
+  onCentrarEnMapa: (feature: any) => void;
 }
 
-export const PropertyDetail: React.FC<PropertyDetailProps> = ({ featureData, onClose }) => {
+export const PropertyDetail: React.FC<PropertyDetailProps> = ({
+  featureData,
+  onClose,
+  onCentrarEnMapa,
+}) => {
   const [diagnostico, setDiagnostico] = useState<DiagnosticoPatrimonial | null>(null);
   const [cargandoDiag, setCargandoDiag] = useState(false);
 
   const props = featureData?.properties || {};
   const esRemate = props.tipo === 'REMATE';
   const esVacio = props.tipo === 'VACIO_CATASTRAL';
+  const noDigitalizado = props.tipo === 'PREDIO_NO_DIGITALIZADO';
   const folio = props.folio_real || (props.finca ? `2-${props.finca}-000` : null);
 
   const ejecutarDiagnostico = async () => {
@@ -35,11 +41,17 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({ featureData, onC
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            {esVacio ? 'Vacío Catastral' : esRemate ? 'Edicto de Remate' : 'Predio Catastrado'}
+          <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded border ${
+            esVacio
+              ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+              : esRemate
+              ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+              : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+          }`}>
+            {esVacio ? 'Vacío Catastral' : esRemate ? 'Edicto de Remate' : noDigitalizado ? 'Predio Registral' : 'Predio Catastrado'}
           </span>
           <h2 className="text-base font-bold text-slate-100 mt-1">
-            {esVacio ? props.id_vacio : folio || 'Inmueble'}
+            {esVacio ? props.id_vacio : folio || props.finca || 'Inmueble'}
           </h2>
         </div>
         <button
@@ -53,11 +65,40 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({ featureData, onC
       {/* Contenido según tipo */}
       <div className="space-y-2 text-xs text-slate-300">
         {esVacio ? (
-          <div className="space-y-1.5 p-3 bg-slate-900/60 rounded-xl border border-slate-800">
-            <p><span className="text-slate-500">Distrito:</span> {props.distrito}</p>
-            <p><span className="text-slate-500">Área Estimada:</span> <strong className="text-amber-400">{Number(props.area_m2).toLocaleString()} m²</strong></p>
-            <p><span className="text-slate-500">Perímetro:</span> {props.perimetro_m} m</p>
-            <p className="text-[11px] text-slate-400 mt-1"><span className="text-slate-500">Fincas Colindantes:</span> {props.colindantes || 'Sin datos'}</p>
+          <div className="space-y-3">
+            <div className="p-3 bg-amber-500/5 rounded-xl border border-amber-500/20 space-y-1.5">
+              <div className="flex justify-between items-baseline">
+                <span className="text-slate-400">Área Estimada:</span>
+                <span className="font-extrabold text-amber-300 text-sm">{Number(props.area_m2).toLocaleString()} m²</span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-slate-400">Distrito:</span>
+                <span className="font-semibold text-slate-200">{props.distrito}</span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-slate-400">Perímetro:</span>
+                <span className="font-semibold text-slate-200">{props.perimetro_m} m</span>
+              </div>
+              <div className="pt-1.5 border-t border-amber-500/10 text-[11px]">
+                <span className="text-slate-400 block mb-0.5">Fincas Registradas Colindantes:</span>
+                <span className="text-slate-300 font-mono text-[10px]">{props.colindantes || 'Límites de zona'}</span>
+              </div>
+            </div>
+
+            {/* Explicación técnica de la oportunidad */}
+            <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 text-[11px] text-slate-400 flex items-start space-x-2">
+              <HelpCircle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+              <span>Terreno no incorporado al mosaico catastral digital. Representa un inmueble sin titular aparente, posesión histórica o finca no georreferenciada susceptible de saneamiento.</span>
+            </div>
+
+            {/* Botón explícito para ver en el mapa */}
+            <button
+              onClick={() => onCentrarEnMapa(featureData)}
+              className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-md shadow-amber-600/20 transition"
+            >
+              <LocateFixed className="w-3.5 h-3.5" />
+              <span>Ver Vacío en el Mapa</span>
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2 p-3 bg-slate-900/60 rounded-xl border border-slate-800">
@@ -70,7 +111,7 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({ featureData, onC
               <span className="font-semibold text-slate-200">{props.plano || 'N/A'}</span>
             </div>
             <div>
-              <span className="text-slate-500 block text-[10px]">Área Registro</span>
+              <span className="text-slate-500 block text-[10px]">Área</span>
               <span className="font-semibold text-slate-200">{props.area_registro_m2 || props.area_m2 || 'N/A'} m²</span>
             </div>
             <div>
@@ -81,6 +122,18 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({ featureData, onC
               <div className="col-span-2 pt-2 border-t border-slate-800">
                 <span className="text-slate-500 block text-[10px]">Base de Remate</span>
                 <span className="font-extrabold text-sm text-emerald-400">{props.monto_base}</span>
+              </div>
+            )}
+            {props.acreedor && (
+              <div className="col-span-2 text-[11px] text-slate-400">
+                <span className="text-slate-500 block text-[10px]">Acreedor</span>
+                <span className="text-slate-200 truncate block">{props.acreedor}</span>
+              </div>
+            )}
+            {props.expediente && (
+              <div className="col-span-2 text-[11px] text-slate-400">
+                <span className="text-slate-500 block text-[10px]">Expediente Judicial</span>
+                <span className="font-mono text-slate-300">{props.expediente}</span>
               </div>
             )}
           </div>

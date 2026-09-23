@@ -13,12 +13,15 @@ export const App: React.FC = () => {
   const [selectedFeature, setSelectedFeature] = useState<any>(null);
   const [tipoMapa, setTipoMapa] = useState<'satelite' | 'calles'>('satelite');
   const [cargandoVacios, setCargandoVacios] = useState(false);
+  const [cargandoRemates, setCargandoRemates] = useState(false);
 
-  useEffect(() => {
+  const cargarRemates = () => {
+    setCargandoRemates(true);
     fetch('/api/remates?canton=Zarcero')
       .then((res) => res.json())
       .then((data) => setRemates(data))
-      .catch((err) => console.error('Error al cargar remates:', err));
+      .catch((err) => console.error('Error al cargar remates:', err))
+      .finally(() => setCargandoRemates(false));
 
     fetch('/api/remates/geojson?canton=Zarcero')
       .then((res) => res.json())
@@ -27,13 +30,16 @@ export const App: React.FC = () => {
         setRematesGeoJson(reproyectado);
       })
       .catch((err) => console.error('Error al cargar capa de remates:', err));
+  };
+
+  useEffect(() => {
+    cargarRemates();
   }, []);
 
   const handleBuscarFinca = async (fincaOPlano: string) => {
     try {
       const res = await fetch(`/api/catastro/buscar?finca=${fincaOPlano}`);
       if (!res.ok) {
-        // En lugar de alert bloqueante, mostrar ficha vacía con aviso
         setSelectedFeature({
           properties: {
             tipo: 'PREDIO_NO_DIGITALIZADO',
@@ -61,7 +67,9 @@ export const App: React.FC = () => {
       const reproyectado = reproyectarGeoJson(data);
       setVaciosGeoJson(reproyectado);
       if (reproyectado?.features && reproyectado.features.length > 0) {
-        setSelectedFeature(reproyectado.features[0]);
+        const primerVacio = reproyectado.features[0];
+        setSelectedFeature(primerVacio);
+        setPredioBuscadoGeoJson(primerVacio);
       }
     } catch (err) {
       console.error('Error al ejecutar Gap Analysis:', err);
@@ -71,7 +79,6 @@ export const App: React.FC = () => {
   };
 
   const handleSelectRemate = (r: Remate) => {
-    // 1. Mostrar de inmediato la ficha con la información legal del remate
     setSelectedFeature({
       properties: {
         tipo: 'REMATE',
@@ -85,7 +92,6 @@ export const App: React.FC = () => {
       },
     });
 
-    // 2. Si tiene número de finca, intentar volar a su polígono en el catastro si existe
     const numFinca = r.folio_real.split('-')[1];
     if (numFinca) {
       fetch(`/api/catastro/buscar?finca=${numFinca}`)
@@ -106,6 +112,10 @@ export const App: React.FC = () => {
     setPredioBuscadoGeoJson(vacioFeature);
   };
 
+  const handleCentrarEnMapa = (feature: any) => {
+    setPredioBuscadoGeoJson({ ...feature });
+  };
+
   return (
     <div className="flex w-screen h-screen overflow-hidden bg-slate-950 font-sans">
       <Sidebar
@@ -115,6 +125,8 @@ export const App: React.FC = () => {
         onSelectVacio={handleSelectVacio}
         onBuscarFinca={handleBuscarFinca}
         onEjecutarGapAnalysis={handleEjecutarGapAnalysis}
+        onEscanearBoletin={cargarRemates}
+        cargandoRemates={cargandoRemates}
         cargandoVacios={cargandoVacios}
         totalVacios={vaciosGeoJson?.features?.length || 0}
       />
@@ -126,13 +138,14 @@ export const App: React.FC = () => {
           predioBuscadoGeoJson={predioBuscadoGeoJson}
           onSelectFeature={(feat) => setSelectedFeature(feat)}
           tipoMapa={tipoMapa}
-          onToggleTipoMapa={() => setTipoMapa(tipoMapa === 'satelite' ? 'calles' : 'satelite')}
+          onSetTipoMapa={(nuevoTipo) => setTipoMapa(nuevoTipo)}
         />
 
         {selectedFeature && (
           <PropertyDetail
             featureData={selectedFeature}
             onClose={() => setSelectedFeature(null)}
+            onCentrarEnMapa={handleCentrarEnMapa}
           />
         )}
       </main>
