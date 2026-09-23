@@ -38,6 +38,12 @@ Sistema especializado en detectar, georreferenciar y sanear propiedades en estad
    - Reproyección al vuelo de coordenadas CRTM05 (EPSG:5367) a WGS84 con `proj4js`.
    - Panel lateral con búsqueda catastral, lista de oportunidades y ficha técnica con evaluación patrimonial.
 
+6. **Módulo 6: Triage Inteligente con Modelos de Sistema 1 (`src/infrastructure/laya_triage_client.py`)**
+   - Clasificación no autoregresiva ultrarrápida (<35 ms) con decisiones tipadas y probabilidades calibradas (Laya / ModernBERT / mmBERT).
+   - Descarte automático de vehículos y muebles que no son inmuebles.
+   - Detección de morosidad fiscal/municipal (*nicho de oro*).
+   - Evaluación de riesgo de gravámenes complejos (usufructo, demandas, concesiones de agua) y nivel de urgencia de la subasta (1°, 2° o 3° remate).
+
 ---
 
 ## 🚀 Guía Rápida de Comandos CLI
@@ -53,16 +59,21 @@ python main.py visor
 ```
 > Abre automáticamente `http://127.0.0.1:8000` con el mapa satelital interactivo.
 
-### 2. Escanear Remates en el Boletín Judicial
+### 2. Triage de Edictos con Modelo de Sistema 1 (Laya)
 ```powershell
-# Escanear los últimos 7 días en Zarcero:
+python main.py triage --texto "En este Despacho saquese a remate la finca matricula 2-123456-000 en cobro de Municipalidad de Zarcero por impuestos territoriales, soportando usufructo vitalicio."
+```
+
+### 3. Escanear Remates en el Boletín Judicial
+```powershell
+# Escanear los últimos 7 días en Zarcero (con triage automático):
 python main.py escanear --canton Zarcero --dias 7
 
 # Escanear una fecha específica:
 python main.py escanear --canton Zarcero --fecha 2023-08-21
 ```
 
-### 3. Listar y Exportar Oportunidades Guardadas
+### 4. Listar y Exportar Oportunidades Guardadas
 ```powershell
 # Listar remates almacenados en la base de datos:
 python main.py listar --canton Zarcero
@@ -71,17 +82,17 @@ python main.py listar --canton Zarcero
 python main.py exportar --canton Zarcero --formato csv --salida data/remates_zarcero.csv
 ```
 
-### 4. Consultar un Predio Directo en el Catastro
+### 5. Consultar un Predio Directo en el Catastro
 ```powershell
 python main.py buscar-predio --finca 214978
 ```
 
-### 5. Detectar Vacíos Catastrales (Eslabones Perdidos)
+### 6. Detectar Vacíos Catastrales (Eslabones Perdidos)
 ```powershell
 python main.py detectar-vacios --distrito Guadalupe --area-min 500
 ```
 
-### 6. Diagnóstico Legal de un Folio Real
+### 7. Diagnóstico Legal de un Folio Real
 ```powershell
 python main.py diagnosticar --folio 2-120500-000 --escenario sociedad_disuelta
 ```
@@ -95,4 +106,4 @@ El proyecto cuenta con una suite completa de pruebas unitarias y de integración
 ```powershell
 pytest -v
 ```
-*(17 pruebas unitarias pasando al 100%)*
+*(23 pruebas unitarias pasando al 100%)*
