@@ -36,7 +36,7 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({ featureData, onC
       <div className="flex items-start justify-between">
         <div>
           <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            {esVacio ? 'Eslabón Perdido' : esRemate ? 'Edicto de Remate' : 'Predio Catastrado'}
+            {esVacio ? 'Vacío Catastral' : esRemate ? 'Edicto de Remate' : 'Predio Catastrado'}
           </span>
           <h2 className="text-base font-bold text-slate-100 mt-1">
             {esVacio ? props.id_vacio : folio || 'Inmueble'}

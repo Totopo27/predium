@@ -33,7 +33,15 @@ export const App: React.FC = () => {
     try {
       const res = await fetch(`/api/catastro/buscar?finca=${fincaOPlano}`);
       if (!res.ok) {
-        alert('Predio no encontrado en el catastro digital de Zarcero.');
+        // En lugar de alert bloqueante, mostrar ficha vacía con aviso
+        setSelectedFeature({
+          properties: {
+            tipo: 'PREDIO_NO_DIGITALIZADO',
+            finca: fincaOPlano,
+            distrito: 'No georreferenciado en WFS digital',
+            detalles: 'Este inmueble no tiene plano digitalizado en el catastro municipal actual o es una finca antigua.',
+          },
+        });
         return;
       }
       const data = await res.json();
@@ -41,7 +49,7 @@ export const App: React.FC = () => {
       setPredioBuscadoGeoJson(reproyectado);
       setSelectedFeature(reproyectado);
     } catch (err) {
-      alert('Error al consultar el servicio catastral.');
+      console.error('Error al consultar catastro:', err);
     }
   };
 
@@ -53,26 +61,48 @@ export const App: React.FC = () => {
       const reproyectado = reproyectarGeoJson(data);
       setVaciosGeoJson(reproyectado);
       if (reproyectado?.features && reproyectado.features.length > 0) {
-        // Abrir automáticamente la ficha técnica del primer vacío encontrado
         setSelectedFeature(reproyectado.features[0]);
       }
     } catch (err) {
-      alert('Error al ejecutar el análisis de vacíos topológicos.');
+      console.error('Error al ejecutar Gap Analysis:', err);
     } finally {
       setCargandoVacios(false);
     }
   };
 
   const handleSelectRemate = (r: Remate) => {
+    // 1. Mostrar de inmediato la ficha con la información legal del remate
+    setSelectedFeature({
+      properties: {
+        tipo: 'REMATE',
+        folio_real: r.folio_real,
+        expediente: r.expediente,
+        acreedor: r.acreedor,
+        demandado: r.demandado,
+        monto_base: `${r.moneda} ${r.monto_base.toLocaleString()}`,
+        distrito: r.distrito,
+        plano: r.plano,
+      },
+    });
+
+    // 2. Si tiene número de finca, intentar volar a su polígono en el catastro si existe
     const numFinca = r.folio_real.split('-')[1];
     if (numFinca) {
-      handleBuscarFinca(numFinca);
+      fetch(`/api/catastro/buscar?finca=${numFinca}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) {
+            const reproyectado = reproyectarGeoJson(data);
+            setPredioBuscadoGeoJson(reproyectado);
+            setSelectedFeature(reproyectado);
+          }
+        })
+        .catch(() => {});
     }
   };
 
   const handleSelectVacio = (vacioFeature: any) => {
     setSelectedFeature(vacioFeature);
-    // Asignar a predioBuscadoGeoJson para que el mapa haga flyTo a sus coordenadas
     setPredioBuscadoGeoJson(vacioFeature);
   };
 

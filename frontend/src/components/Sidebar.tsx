@@ -102,7 +102,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center justify-between">
               <label className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center space-x-1">
                 <HelpCircle className="w-3 h-3 text-amber-400" />
-                <span>Eslabones Perdidos (Sin Registro)</span>
+                <span>Vacíos Catastrales (Sin Registro)</span>
               </label>
               <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">
                 {vaciosFeatures.length}
@@ -123,7 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {p.id_vacio || `Vacío #${idx + 1}`}
                       </span>
                       <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold border border-amber-500/30">
-                        Hueco Catastral
+                        Vacío Catastral
                       </span>
                     </div>
                     <div className="flex items-baseline justify-between mt-1">

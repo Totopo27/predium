@@ -25,11 +25,11 @@ export const MapView: React.FC<MapProps> = ({
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
 
-    const mapStyle = {
-      version: 8 as const,
+    const mapStyle: maplibregl.StyleSpecification = {
+      version: 8,
       sources: {
         'esri-sat': {
-          type: 'raster' as const,
+          type: 'raster',
           tiles: [
             'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
           ],
@@ -37,7 +37,7 @@ export const MapView: React.FC<MapProps> = ({
           attribution: '&copy; Esri & contributors',
         },
         'osm-tiles': {
-          type: 'raster' as const,
+          type: 'raster',
           tiles: [
             'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           ],
@@ -47,10 +47,20 @@ export const MapView: React.FC<MapProps> = ({
       },
       layers: [
         {
-          id: 'base-sat',
-          type: 'raster' as const,
-          source: tipoMapa === 'satelite' ? 'esri-sat' : 'osm-tiles',
-          paint: {},
+          id: 'capa-calles',
+          type: 'raster',
+          source: 'osm-tiles',
+          layout: {
+            visibility: tipoMapa === 'calles' ? 'visible' : 'none',
+          },
+        },
+        {
+          id: 'capa-satelite',
+          type: 'raster',
+          source: 'esri-sat',
+          layout: {
+            visibility: tipoMapa === 'satelite' ? 'visible' : 'none',
+          },
         },
       ],
     };
@@ -69,6 +79,7 @@ export const MapView: React.FC<MapProps> = ({
     mapRef.current = map;
 
     map.on('load', () => {
+      // 1. Capa de Vacíos Catastrales (Amarillo)
       map.addSource('vacios-source', {
         type: 'geojson',
         data: vaciosGeoJson || { type: 'FeatureCollection', features: [] },
@@ -94,6 +105,7 @@ export const MapView: React.FC<MapProps> = ({
         },
       });
 
+      // 2. Capa de Remates (Rojo)
       map.addSource('remates-source', {
         type: 'geojson',
         data: rematesGeoJson || { type: 'FeatureCollection', features: [] },
@@ -119,6 +131,7 @@ export const MapView: React.FC<MapProps> = ({
         },
       });
 
+      // 3. Capa de Predio Buscado (Verde Esmeralda)
       map.addSource('predio-buscado-source', {
         type: 'geojson',
         data: predioBuscadoGeoJson || { type: 'FeatureCollection', features: [] },
@@ -167,24 +180,28 @@ export const MapView: React.FC<MapProps> = ({
     };
   }, []);
 
+  // Conmutador directo de visibilidad entre satélite y calles
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
 
-    const sourceId = tipoMapa === 'satelite' ? 'esri-sat' : 'osm-tiles';
-    if (map.getLayer('base-sat')) {
-      map.removeLayer('base-sat');
-      map.addLayer(
-        {
-          id: 'base-sat',
-          type: 'raster',
-          source: sourceId,
-        },
-        'vacios-fill'
+    if (map.getLayer('capa-satelite')) {
+      map.setLayoutProperty(
+        'capa-satelite',
+        'visibility',
+        tipoMapa === 'satelite' ? 'visible' : 'none'
+      );
+    }
+    if (map.getLayer('capa-calles')) {
+      map.setLayoutProperty(
+        'capa-calles',
+        'visibility',
+        tipoMapa === 'calles' ? 'visible' : 'none'
       );
     }
   }, [tipoMapa]);
 
+  // Actualizar datos de remates
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
@@ -194,6 +211,7 @@ export const MapView: React.FC<MapProps> = ({
     }
   }, [rematesGeoJson]);
 
+  // Actualizar datos de vacíos y volar automáticamente
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
@@ -201,7 +219,6 @@ export const MapView: React.FC<MapProps> = ({
     if (src && vaciosGeoJson) {
       src.setData(vaciosGeoJson);
 
-      // Si hay vacíos detectados, volar automáticamente a su ubicación
       const features = vaciosGeoJson.features;
       if (features && features.length > 0) {
         const bounds = new maplibregl.LngLatBounds();
@@ -220,6 +237,7 @@ export const MapView: React.FC<MapProps> = ({
     }
   }, [vaciosGeoJson]);
 
+  // Actualizar y volar al predio buscado
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
@@ -247,13 +265,14 @@ export const MapView: React.FC<MapProps> = ({
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
 
+      {/* Controles flotantes de capas y perspectiva */}
       <div className="absolute top-5 left-5 z-10 flex space-x-2">
         <button
           onClick={onToggleTipoMapa}
-          className="flex items-center space-x-2 px-3 py-2 bg-slate-900/85 hover:bg-slate-800 text-slate-200 rounded-xl border border-slate-700/80 shadow-xl backdrop-blur-md text-xs font-semibold transition"
+          className="flex items-center space-x-2 px-3.5 py-2 bg-slate-900/90 hover:bg-slate-800 text-slate-100 rounded-xl border border-slate-700/80 shadow-xl backdrop-blur-md text-xs font-semibold transition"
         >
           <Layers className="w-3.5 h-3.5 text-cyan-400" />
-          <span>{tipoMapa === 'satelite' ? 'Modo Satélite' : 'Modo Calles'}</span>
+          <span>{tipoMapa === 'satelite' ? 'Ver Calles' : 'Ver Satélite'}</span>
         </button>
 
         <button
@@ -264,7 +283,7 @@ export const MapView: React.FC<MapProps> = ({
               map.easeTo({ pitch: currentPitch > 10 ? 0 : 55, duration: 800 });
             }
           }}
-          className="flex items-center space-x-2 px-3 py-2 bg-slate-900/85 hover:bg-slate-800 text-slate-200 rounded-xl border border-slate-700/80 shadow-xl backdrop-blur-md text-xs font-semibold transition"
+          className="flex items-center space-x-2 px-3.5 py-2 bg-slate-900/90 hover:bg-slate-800 text-slate-100 rounded-xl border border-slate-700/80 shadow-xl backdrop-blur-md text-xs font-semibold transition"
         >
           <Compass className="w-3.5 h-3.5 text-emerald-400" />
           <span>Alternar 2.5D</span>
