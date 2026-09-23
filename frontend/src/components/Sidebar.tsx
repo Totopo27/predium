@@ -8,7 +8,7 @@ interface SidebarProps {
   onSelectRemate: (remate: Remate) => void;
   onSelectVacio: (vacioFeature: any) => void;
   onBuscarFinca: (fincaOPlano: string) => void;
-  onEjecutarGapAnalysis: () => void;
+  onEjecutarGapAnalysis: (distrito: string) => void;
   onEscanearBoletin: () => void;
   cargandoRemates: boolean;
   cargandoVacios: boolean;
@@ -29,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [terminoBusqueda, setTerminoBusqueda] = useState('');
   const [filtroRemates, setFiltroRemates] = useState('');
+  const [distritoSeleccionado, setDistritoSeleccionado] = useState('TODOS');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,22 +93,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </form>
 
       {/* Acciones Rápidas: Detectar Vacíos & Escanear Boletín */}
-      <div className="p-4 border-b border-slate-800/80 space-y-2">
-        <button
-          onClick={onEjecutarGapAnalysis}
-          disabled={cargandoVacios}
-          className="w-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-between transition group"
-        >
-          <div className="flex items-center space-x-2">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-12 transition" />
-            <span>{cargandoVacios ? 'Calculando vacíos...' : 'Detectar Vacíos'}</span>
+      <div className="p-4 border-b border-slate-800/80 space-y-2.5">
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Distrito a Analizar</label>
+            <select
+              value={distritoSeleccionado}
+              onChange={(e) => setDistritoSeleccionado(e.target.value)}
+              className="bg-slate-900 border border-slate-700/80 rounded-lg px-2 py-0.5 text-[11px] text-slate-200 focus:outline-none focus:border-amber-400"
+            >
+              <option value="TODOS">Cantón Completo (Todos)</option>
+              <option value="GUADALUPE">Guadalupe</option>
+              <option value="ZAPOTE">Zapote</option>
+              <option value="PALMIRA">Palmira</option>
+              <option value="ZARCERO">Zarcero Centro</option>
+              <option value="LAGUNA">Laguna</option>
+              <option value="TAPESCO">Tapesco</option>
+              <option value="BRISAS">Brisas</option>
+            </select>
           </div>
-          {totalVacios > 0 && (
-            <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-bold">
-              {totalVacios} hallazgos
-            </span>
-          )}
-        </button>
+
+          <button
+            onClick={() => onEjecutarGapAnalysis(distritoSeleccionado)}
+            disabled={cargandoVacios}
+            className="w-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-between transition group"
+          >
+            <div className="flex items-center space-x-2">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-12 transition" />
+              <span>{cargandoVacios ? 'Buscando en catastro...' : 'Detectar Vacíos'}</span>
+            </div>
+            {totalVacios > 0 && (
+              <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                {totalVacios} hallazgos
+              </span>
+            )}
+          </button>
+        </div>
 
         <button
           onClick={onEscanearBoletin}

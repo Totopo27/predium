@@ -14,6 +14,8 @@ class GapAnalysisService:
     usando los servicios WFS oficiales y exportar los resultados a GeoJSON.
     """
 
+    DISTRITOS_ZARCERO = ["GUADALUPE", "ZAPOTE", "PALMIRA", "ZARCERO", "LAGUNA", "TAPESCO", "BRISAS"]
+
     def __init__(
         self,
         catastro_client: Optional[CatastroZarceroClient] = None,
@@ -55,6 +57,30 @@ class GapAnalysisService:
         )
 
         return resultado
+
+    def ejecutar_analisis_canton(
+        self,
+        distritos: Optional[List[str]] = None,
+        area_minima_m2: float = 300.0,
+        area_maxima_m2: float = 80000.0,
+        limite_predios_por_distrito: int = 120,
+    ) -> List[VacioCatastral]:
+        """
+        Recorre los distritos del cantón de Zarcero y consolida todos los vacíos
+        catastrales detectados en una sola colección.
+        """
+        lista = distritos or self.DISTRITOS_ZARCERO
+        todos: List[VacioCatastral] = []
+        for d in lista:
+            res = self.ejecutar_analisis_distrito(
+                distrito=d,
+                area_minima_m2=area_minima_m2,
+                area_maxima_m2=area_maxima_m2,
+                limite_predios=limite_predios_por_distrito,
+            )
+            if res and res.vacios:
+                todos.extend(res.vacios)
+        return todos
 
     @staticmethod
     def exportar_vacios_geojson(

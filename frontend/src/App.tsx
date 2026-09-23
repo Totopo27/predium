@@ -101,10 +101,10 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleEjecutarGapAnalysis = async () => {
+  const handleEjecutarGapAnalysis = async (distrito: string = 'TODOS') => {
     setCargandoVacios(true);
     try {
-      const res = await fetch('/api/vacios/geojson?distrito=Guadalupe&area_min=300&limite_predios=150');
+      const res = await fetch(`/api/vacios/geojson?distrito=${distrito}&area_min=300&limite_predios=120`);
       const data = await res.json();
       const reproyectado = reproyectarGeoJson(data);
       setVaciosGeoJson(reproyectado);
@@ -116,10 +116,10 @@ export const App: React.FC = () => {
         setPredioBuscadoGeoJson(primerVacio);
         mostrarNotificacion(
           'success',
-          `Detección completada: ${total} vacíos catastrales detectados en Guadalupe.`
+          `Detección completada: ${total} vacíos detectados en ${distrito === 'TODOS' ? 'el cantón' : distrito}.`
         );
       } else {
-        mostrarNotificacion('info', 'No se detectaron vacíos territoriales en el área analizada.');
+        mostrarNotificacion('info', `No se detectaron vacíos en ${distrito === 'TODOS' ? 'el cantón' : distrito}.`);
       }
     } catch (err) {
       console.error('Error al ejecutar Gap Analysis:', err);

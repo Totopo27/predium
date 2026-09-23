@@ -165,20 +165,30 @@ def buscar_predio(
 
 @api_router.get("/vacios/geojson")
 def vacios_geojson(
-    distrito: str = "Guadalupe",
-    area_min: float = 400.0,
-    limite_predios: int = 100,
+    distrito: str = "TODOS",
+    area_min: float = 300.0,
+    area_max: float = 80000.0,
+    limite_predios: int = 120,
 ):
     service = GapAnalysisService()
-    resultado = service.ejecutar_analisis_distrito(
-        distrito=distrito, area_minima_m2=area_min, limite_predios=limite_predios
-    )
 
-    if not resultado:
-        return {"type": "FeatureCollection", "features": []}
+    if distrito.upper() in ("TODOS", "CANTON", "ZARCERO", "COMPLETO"):
+        vacios = service.ejecutar_analisis_canton(
+            area_minima_m2=area_min,
+            area_maxima_m2=area_max,
+            limite_predios_por_distrito=limite_predios,
+        )
+    else:
+        resultado = service.ejecutar_analisis_distrito(
+            distrito=distrito,
+            area_minima_m2=area_min,
+            area_maxima_m2=area_max,
+            limite_predios=limite_predios,
+        )
+        vacios = resultado.vacios if resultado else []
 
     features = []
-    for v in resultado.vacios:
+    for v in vacios:
         features.append({
             "type": "Feature",
             "properties": {
@@ -196,10 +206,8 @@ def vacios_geojson(
     return {
         "type": "FeatureCollection",
         "resumen": {
-            "area_distrito_m2": resultado.area_distrito_m2,
-            "area_inscrita_m2": resultado.area_inscrita_m2,
-            "porcentaje_catastrado": resultado.porcentaje_catastrado,
-            "total_vacios": resultado.total_vacios_detectados,
+            "distrito_consultado": distrito,
+            "total_vacios": len(vacios),
         },
         "features": features,
     }
