@@ -13,7 +13,7 @@ from src.domain.models import (
 
 
 class SqliteRemateRepository(RemateRepository):
-    """Implementación de persistencia y deduplicación en SQLite."""
+    """Implementación de persistencia y deduplicación en SQLite con gestión limpia de conexiones."""
 
     def __init__(self, db_path: str = "data/remates.db"):
         self.db_path = Path(db_path)
@@ -26,7 +26,8 @@ class SqliteRemateRepository(RemateRepository):
         return conn
 
     def _inicializar_bd(self) -> None:
-        with self._get_connection() as conn:
+        conn = self._get_connection()
+        try:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -52,70 +53,83 @@ class SqliteRemateRepository(RemateRepository):
                     fecha_publicacion TEXT,
                     estado TEXT DEFAULT 'NUEVO',
                     texto_original TEXT,
+                    tipo_bien TEXT DEFAULT 'INMUEBLE',
+                    origen_deuda TEXT DEFAULT 'BANCARIO',
+                    es_morosidad_municipal INTEGER DEFAULT 0,
+                    urgencia TEXT DEFAULT 'PRIMERA',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(folio_real, expediente)
                 )
                 """
             )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_remates_canton ON remates(canton)"
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_remates_folio ON remates(folio_real)"
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_remates_estado ON remates(estado)"
-            )
+
+            # Migraciones no destructivas para bases de datos existentes
+            columnas_existentes = [r[1] for r in cursor.execute("PRAGMA table_info(remates)").fetchall()]
+            if "tipo_bien" not in columnas_existentes:
+                cursor.execute("ALTER TABLE remates ADD COLUMN tipo_bien TEXT DEFAULT 'INMUEBLE'")
+            if "origen_deuda" not in columnas_existentes:
+                cursor.execute("ALTER TABLE remates ADD COLUMN origen_deuda TEXT DEFAULT 'BANCARIO'")
+            if "es_morosidad_municipal" not in columnas_existentes:
+                cursor.execute("ALTER TABLE remates ADD COLUMN es_morosidad_municipal INTEGER DEFAULT 0")
+            if "urgencia" not in columnas_existentes:
+                cursor.execute("ALTER TABLE remates ADD COLUMN urgencia TEXT DEFAULT 'PRIMERA'")
+
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_remates_canton ON remates(canton)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_remates_folio ON remates(folio_real)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_remates_estado ON remates(estado)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_remates_municipal ON remates(es_morosidad_municipal)")
             conn.commit()
+        finally:
+            conn.close()
 
     def guardar(self, edicto: EdictoRemate) -> bool:
-        """
-        Inserta un edicto o ignora si ya existe la combinación (folio_real, expediente) o id_edicto.
-        Retorna True si fue insertado, False si ya existía.
-        """
         fecha_pub_str = edicto.fecha_publicacion.isoformat() if edicto.fecha_publicacion else None
-
-        with self._get_connection() as conn:
+        conn = self._get_connection()
+        try:
             cursor = conn.cursor()
-            try:
-                cursor.execute(
-                    """
-                    INSERT INTO remates (
-                        id_edicto, folio_real, provincia_codigo, numero_finca, derecho,
-                        plano_catastrado, provincia, canton, distrito, expediente,
-                        juzgado, acreedor, demandado, moneda, monto_base,
-                        monto_segundo_remate, monto_tercer_remate, fecha_publicacion,
-                        texto_original
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        edicto.id_edicto,
-                        edicto.finca.folio_real,
-                        edicto.finca.provincia_codigo,
-                        edicto.finca.numero_finca,
-                        edicto.finca.derecho,
-                        edicto.finca.plano_catastrado,
-                        edicto.ubicacion.provincia,
-                        edicto.ubicacion.canton,
-                        edicto.ubicacion.distrito,
-                        edicto.expediente,
-                        edicto.juzgado,
-                        edicto.acreedor,
-                        edicto.demandado,
-                        edicto.base.moneda.value,
-                        edicto.base.monto_base,
-                        edicto.base.monto_segundo_remate,
-                        edicto.base.monto_tercer_remate,
-                        fecha_pub_str,
-                        edicto.texto_original,
-                    ),
-                )
-                conn.commit()
-                return True
-            except sqlite3.IntegrityError:
-                # Ya existía (duplicado)
-                return False
+            cursor.execute(
+                """
+                INSERT INTO remates (
+                    id_edicto, folio_real, provincia_codigo, numero_finca, derecho,
+                    plano_catastrado, provincia, canton, distrito, expediente,
+                    juzgado, acreedor, demandado, moneda, monto_base,
+                    monto_segundo_remate, monto_tercer_remate, fecha_publicacion,
+                    texto_original, tipo_bien, origen_deuda, es_morosidad_municipal, urgencia
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    edicto.id_edicto,
+                    edicto.finca.folio_real,
+                    edicto.finca.provincia_codigo,
+                    edicto.finca.numero_finca,
+                    edicto.finca.derecho,
+                    edicto.finca.plano_catastrado,
+                    edicto.ubicacion.provincia,
+                    edicto.ubicacion.canton,
+                    edicto.ubicacion.distrito,
+                    edicto.expediente,
+                    edicto.juzgado,
+                    edicto.acreedor,
+                    edicto.demandado,
+                    edicto.base.moneda.value,
+                    edicto.base.monto_base,
+                    edicto.base.monto_segundo_remate,
+                    edicto.base.monto_tercer_remate,
+                    fecha_pub_str,
+                    edicto.texto_original,
+                    edicto.tipo_bien,
+                    edicto.origen_deuda,
+                    1 if edicto.es_morosidad_municipal else 0,
+                    edicto.urgencia,
+                ),
+            )
+            conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+        finally:
+            conn.close()
 
     def guardar_muchos(self, edictos: List[EdictoRemate]) -> int:
         nuevos = 0
@@ -155,6 +169,10 @@ class SqliteRemateRepository(RemateRepository):
                 monto_tercer_remate=row["monto_tercer_remate"],
             ),
             texto_original=row["texto_original"],
+            tipo_bien=row["tipo_bien"] if "tipo_bien" in row.keys() else "INMUEBLE",
+            origen_deuda=row["origen_deuda"] if "origen_deuda" in row.keys() else "BANCARIO",
+            es_morosidad_municipal=bool(row["es_morosidad_municipal"]) if "es_morosidad_municipal" in row.keys() else False,
+            urgencia=row["urgencia"] if "urgencia" in row.keys() else "PRIMERA",
         )
 
     def listar(
@@ -177,14 +195,18 @@ class SqliteRemateRepository(RemateRepository):
         query += " ORDER BY id DESC LIMIT ?"
         params.append(limite)
 
-        with self._get_connection() as conn:
+        conn = self._get_connection()
+        try:
             cursor = conn.cursor()
             cursor.execute(query, tuple(params))
             filas = cursor.fetchall()
             return [self._fila_a_modelo(r) for r in filas]
+        finally:
+            conn.close()
 
     def obtener_por_folio_real(self, folio_real: str) -> Optional[EdictoRemate]:
-        with self._get_connection() as conn:
+        conn = self._get_connection()
+        try:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT * FROM remates WHERE folio_real = ? LIMIT 1",
@@ -192,3 +214,5 @@ class SqliteRemateRepository(RemateRepository):
             )
             fila = cursor.fetchone()
             return self._fila_a_modelo(fila) if fila else None
+        finally:
+            conn.close()

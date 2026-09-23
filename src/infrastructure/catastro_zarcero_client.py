@@ -1,7 +1,13 @@
 import httpx
+import re
 from typing import Optional, List, Dict, Any
 from src.domain.gis_models import PredioCatastral
 from src.domain.catastro_provider import CatastroProvider
+
+
+def sanitizar_cql_param(valor: str) -> str:
+    """Elimina comillas simples, caracteres de escape y caracteres no alfanuméricos peligrosos."""
+    return re.sub(r"['\";\\]", "", valor).strip()
 
 
 class CatastroZarceroClient(CatastroProvider):
@@ -58,7 +64,9 @@ class CatastroZarceroClient(CatastroProvider):
         )
 
     def buscar_por_finca(self, numero_finca: str) -> Optional[PredioCatastral]:
-        finca_limpia = numero_finca.strip().lstrip("0")
+        finca_limpia = sanitizar_cql_param(numero_finca.lstrip("0"))
+        if not finca_limpia:
+            return None
         cql = f"finca LIKE '%{finca_limpia}%'"
         try:
             data = self._ejecutar_wfs_query("catastro", cql_filter=cql, count=5)
@@ -70,7 +78,9 @@ class CatastroZarceroClient(CatastroProvider):
             return None
 
     def buscar_por_plano(self, numero_plano: str) -> Optional[PredioCatastral]:
-        plano_limpio = numero_plano.replace("-", "").strip()
+        plano_limpio = sanitizar_cql_param(numero_plano.replace("-", ""))
+        if not plano_limpio:
+            return None
         cql = f"plano LIKE '%{plano_limpio}%'"
         try:
             data = self._ejecutar_wfs_query("catastro", cql_filter=cql, count=5)
@@ -82,7 +92,9 @@ class CatastroZarceroClient(CatastroProvider):
             return None
 
     def obtener_predios_distrito(self, distrito: str, limite: int = 100) -> List[PredioCatastral]:
-        distrito_upper = distrito.strip().upper()
+        distrito_upper = sanitizar_cql_param(distrito.upper())
+        if not distrito_upper:
+            return []
         cql = f"n_distrito = '{distrito_upper}'"
         try:
             data = self._ejecutar_wfs_query("catastro", cql_filter=cql, count=limite)
