@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, List, Dict, Any
 from datetime import date, datetime, timedelta
 from src.infrastructure.sqlite_repository import SqliteRemateRepository
-from src.infrastructure.catastro_zarcero_client import CatastroZarceroClient
+from src.infrastructure.catastro_factory import CatastroResolver
 from src.infrastructure.registro_nacional_client import RegistroNacionalClient
 from src.application.georreferenciar_service import GeorreferenciarService
 from src.application.gap_analysis_service import GapAnalysisService
@@ -10,6 +10,12 @@ from src.application.orchestrator_service import OrchestratorService
 from src.domain.registro_models import TitularFinca, TipoPersona, Gravamen, GravamenTipo, EstadoSociedad
 
 api_router = APIRouter(prefix="/api")
+
+
+@api_router.get("/territorios")
+def listar_territorios():
+    """Devuelve el catálogo de cantones soportados, centros geográficos y distritos oficiales."""
+    return [t.model_dump() for t in CatastroResolver.listar_territorios()]
 
 
 @api_router.get("/remates")
@@ -131,13 +137,14 @@ def remates_geojson(canton: Optional[str] = "Zarcero"):
 def buscar_predio(
     finca: Optional[str] = None,
     plano: Optional[str] = None,
+    canton: Optional[str] = Query("Zarcero", description="Cantón donde se ubica el predio"),
 ):
-    client = CatastroZarceroClient()
+    provider = CatastroResolver.obtener_proveedor(canton)
     predio = None
     if finca:
-        predio = client.buscar_por_finca(finca)
+        predio = provider.buscar_por_finca(finca)
     elif plano:
-        predio = client.buscar_por_plano(plano)
+        predio = provider.buscar_por_plano(plano)
     else:
         raise HTTPException(status_code=400, detail="Debe indicar 'finca' o 'plano'")
 

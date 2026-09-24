@@ -49,3 +49,18 @@ export interface VacioCatastral {
   perimetro_m: number;
   colindantes: string;
 }
+
+export interface DistritoInfo {
+  id: string;
+  label: string;
+}
+
+export interface TerritorioInfo {
+  canton: string;
+  provincia: string;
+  codigo_canton: string;
+  centro_lng_lat: [number, number];
+  distritos: DistritoInfo[];
+  proveedor_activo: boolean;
+  descripcion_cobertura: string;
+}

@@ -51,3 +51,6 @@ data/*.geojson
 frontend/node_modules/
 frontend/dist/
 frontend/dist-ssr/
+
+# Agent internals
+.atl/

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapView } from './components/Map';
 import { Sidebar } from './components/Sidebar';
 import { PropertyDetail } from './components/PropertyDetail';
-import type { Remate } from './types';
+import type { Remate, TerritorioInfo } from './types';
 import { reproyectarGeoJson } from './lib/geo';
 
 interface Notificacion {
@@ -10,12 +10,8 @@ interface Notificacion {
   mensaje: string;
 }
 
-const CENTROS_CANTON: Record<string, [number, number]> = {
-  Zarcero: [-84.394, 10.188],
-  'San Ramón': [-84.470, 10.088],
-};
-
 export const App: React.FC = () => {
+  const [territorios, setTerritorios] = useState<TerritorioInfo[]>([]);
   const [cantonActivo, setCantonActivo] = useState('Zarcero');
   const [remates, setRemates] = useState<Remate[]>([]);
   const [rematesGeoJson, setRematesGeoJson] = useState<any>(null);
@@ -35,12 +31,12 @@ export const App: React.FC = () => {
   };
 
   const cargarRemates = (canton: string = cantonActivo) => {
-    fetch(`/api/remates?canton=${canton}`)
+    fetch(`/api/remates?canton=${encodeURIComponent(canton)}`)
       .then((res) => res.json())
       .then((data) => setRemates(data))
       .catch((err) => console.error('Error al cargar remates:', err));
 
-    fetch(`/api/remates/geojson?canton=${canton}`)
+    fetch(`/api/remates/geojson?canton=${encodeURIComponent(canton)}`)
       .then((res) => res.json())
       .then((data) => {
         const reproyectado = reproyectarGeoJson(data);
@@ -49,14 +45,29 @@ export const App: React.FC = () => {
       .catch((err) => console.error('Error al cargar capa de remates:', err));
   };
 
+  // Cargar catálogo de territorios al montar
+  useEffect(() => {
+    fetch('/api/territorios')
+      .then((res) => res.json())
+      .then((data: TerritorioInfo[]) => {
+        if (data && data.length > 0) {
+          setTerritorios(data);
+        }
+      })
+      .catch((err) => console.error('Error cargando territorios:', err));
+
+    cargarRemates('Zarcero');
+  }, []);
+
   const handleCambiarCanton = (nuevoCanton: string) => {
     setCantonActivo(nuevoCanton);
     cargarRemates(nuevoCanton);
     setVaciosGeoJson({ type: 'FeatureCollection', features: [] });
     setSelectedFeature(null);
 
-    // Volar al nuevo cantón
-    const centro = CENTROS_CANTON[nuevoCanton] || CENTROS_CANTON['Zarcero'];
+    // Volar al nuevo cantón según coordenadas del territorio
+    const terr = territorios.find((t) => t.canton === nuevoCanton);
+    const centro = terr ? terr.centro_lng_lat : [-84.394, 10.188];
     setPredioBuscadoGeoJson({
       type: 'Feature',
       geometry: {
@@ -65,15 +76,15 @@ export const App: React.FC = () => {
       },
     });
 
-    mostrarNotificacion('info', `Territorio activo cambiado a: ${nuevoCanton}, Alajuela.`);
+    mostrarNotificacion('info', `Territorio activo cambiado a: ${nuevoCanton}.`);
   };
 
   const handleEscanearBoletin = async (dias: number = 15, fecha?: string) => {
     setCargandoRemates(true);
     try {
       const url = fecha
-        ? `/api/remates/escanear?canton=${cantonActivo}&fecha=${fecha}`
-        : `/api/remates/escanear?canton=${cantonActivo}&dias=${dias}`;
+        ? `/api/remates/escanear?canton=${encodeURIComponent(cantonActivo)}&fecha=${fecha}`
+        : `/api/remates/escanear?canton=${encodeURIComponent(cantonActivo)}&dias=${dias}`;
 
       const res = await fetch(url, { method: 'POST' });
       const data = await res.json();
@@ -100,30 +111,26 @@ export const App: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    cargarRemates('Zarcero');
-  }, []);
-
   const handleBuscarFinca = async (fincaOPlano: string) => {
     try {
-      const res = await fetch(`/api/catastro/buscar?finca=${fincaOPlano}`);
+      const res = await fetch(`/api/catastro/buscar?finca=${encodeURIComponent(fincaOPlano)}&canton=${encodeURIComponent(cantonActivo)}`);
       if (!res.ok) {
         setSelectedFeature({
           properties: {
             tipo: 'PREDIO_NO_DIGITALIZADO',
             finca: fincaOPlano,
-            distrito: `No georreferenciado en WFS digital (${cantonActivo})`,
+            distrito: `No georreferenciado en WFS (${cantonActivo})`,
             detalles: 'Este inmueble no tiene plano digitalizado en el catastro municipal actual o es una finca antigua.',
           },
         });
-        mostrarNotificacion('info', `Finca ${fincaOPlano}: No localizada en el mosaico catastral digital.`);
+        mostrarNotificacion('info', `Finca ${fincaOPlano}: No localizada en catastro de ${cantonActivo}.`);
         return;
       }
       const data = await res.json();
       const reproyectado = reproyectarGeoJson(data);
       setPredioBuscadoGeoJson(reproyectado);
       setSelectedFeature(reproyectado);
-      mostrarNotificacion('success', `Predio ${fincaOPlano} localizado en catastro oficial.`);
+      mostrarNotificacion('success', `Predio ${fincaOPlano} localizado en catastro de ${cantonActivo}.`);
     } catch (err) {
       console.error('Error al consultar catastro:', err);
     }
@@ -144,10 +151,10 @@ export const App: React.FC = () => {
         setPredioBuscadoGeoJson(primerVacio);
         mostrarNotificacion(
           'success',
-          `Detección completada: ${total} vacíos detectados en ${distrito === 'TODOS' ? 'el cantón' : distrito}.`
+          `Detección completada: ${total} vacíos detectados en ${distrito === 'TODOS' ? cantonActivo : distrito}.`
         );
       } else {
-        mostrarNotificacion('info', `No se detectaron vacíos en ${distrito === 'TODOS' ? 'el cantón' : distrito}.`);
+        mostrarNotificacion('info', `No se detectaron vacíos en ${distrito === 'TODOS' ? cantonActivo : distrito}.`);
       }
     } catch (err) {
       console.error('Error al ejecutar Gap Analysis:', err);
@@ -172,8 +179,9 @@ export const App: React.FC = () => {
     });
 
     const numFinca = r.folio_real.split('-')[1];
+    const cantonRemate = r.canton || cantonActivo;
     if (numFinca) {
-      fetch(`/api/catastro/buscar?finca=${numFinca}`)
+      fetch(`/api/catastro/buscar?finca=${encodeURIComponent(numFinca)}&canton=${encodeURIComponent(cantonRemate)}`)
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data) {
@@ -219,6 +227,7 @@ export const App: React.FC = () => {
         remates={remates}
         vaciosFeatures={vaciosGeoJson?.features || []}
         cantonActivo={cantonActivo}
+        territorios={territorios}
         onCambiarCanton={handleCambiarCanton}
         onSelectRemate={handleSelectRemate}
         onSelectVacio={handleSelectVacio}

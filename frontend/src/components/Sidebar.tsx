@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Search, MapPin, AlertTriangle, Building, Flame, Layers, Sparkles, HelpCircle, Eye, RefreshCw, Calendar, Clock, ChevronDown } from 'lucide-react';
-import type { Remate } from '../types';
+import type { Remate, TerritorioInfo } from '../types';
 
 interface SidebarProps {
   remates: Remate[];
   vaciosFeatures: any[];
   cantonActivo: string;
+  territorios: TerritorioInfo[];
   onCambiarCanton: (canton: string) => void;
   onSelectRemate: (remate: Remate) => void;
   onSelectVacio: (vacioFeature: any) => void;
@@ -17,40 +18,11 @@ interface SidebarProps {
   totalVacios: number;
 }
 
-const DISTRITOS_POR_CANTON: Record<string, { id: string; label: string }[]> = {
-  Zarcero: [
-    { id: 'TODOS', label: 'Todo el Cantón (7 Distritos)' },
-    { id: 'GUADALUPE', label: 'Guadalupe' },
-    { id: 'ZAPOTE', label: 'Zapote' },
-    { id: 'PALMIRA', label: 'Palmira' },
-    { id: 'ZARCERO', label: 'Zarcero Centro' },
-    { id: 'LAGUNA', label: 'Laguna' },
-    { id: 'TAPESCO', label: 'Tapesco' },
-    { id: 'BRISAS', label: 'Brisas' },
-  ],
-  'San Ramón': [
-    { id: 'TODOS', label: 'Todo el Cantón (14 Distritos)' },
-    { id: 'SAN RAMON', label: 'San Ramón Centro' },
-    { id: 'PENAS BLANCAS', label: 'Peñas Blancas' },
-    { id: 'ALFARO', label: 'Alfaro' },
-    { id: 'SANTIAGO', label: 'Santiago' },
-    { id: 'SAN JUAN', label: 'San Juan' },
-    { id: 'PIEDADES NORTE', label: 'Piedades Norte' },
-    { id: 'PIEDADES SUR', label: 'Piedades Sur' },
-    { id: 'SAN RAFAEL', label: 'San Rafael' },
-    { id: 'SAN ISIDRO', label: 'San Isidro' },
-    { id: 'ANGELES', label: 'Ángeles' },
-    { id: 'VOLIO', label: 'Volio' },
-    { id: 'CONCEPCION', label: 'Concepción' },
-    { id: 'ZAPOTAL', label: 'Zapotal' },
-    { id: 'SAN LORENZO', label: 'San Lorenzo' },
-  ],
-};
-
 export const Sidebar: React.FC<SidebarProps> = ({
   remates,
   vaciosFeatures,
   cantonActivo,
+  territorios,
   onCambiarCanton,
   onSelectRemate,
   onSelectVacio,
@@ -97,11 +69,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     );
   });
 
-  const distritosDisponibles = DISTRITOS_POR_CANTON[cantonActivo] || DISTRITOS_POR_CANTON['Zarcero'];
+  const territorioActual = territorios.find((t) => t.canton === cantonActivo);
+  const distritosDisponibles = territorioActual?.distritos || [];
 
   return (
     <aside className="w-96 h-screen bg-slate-950/85 backdrop-blur-xl border-r border-slate-800/80 flex flex-col z-20 shadow-2xl">
-      {/* Header con Selector de Cantón Activo */}
+      {/* Header con Selector Dinámico de Cantón */}
       <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 via-teal-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
@@ -123,8 +96,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }}
                   className="bg-transparent text-[11px] font-bold text-slate-200 focus:outline-none cursor-pointer hover:text-emerald-300 pr-4 appearance-none"
                 >
-                  <option value="Zarcero" className="bg-slate-900 text-slate-200">Zarcero, Alajuela</option>
-                  <option value="San Ramón" className="bg-slate-900 text-slate-200">San Ramón, Alajuela</option>
+                  {territorios.map((t) => (
+                    <option key={t.canton} value={t.canton} className="bg-slate-900 text-slate-200">
+                      {t.canton}, {t.provincia}
+                    </option>
+                  ))}
                 </select>
                 <ChevronDown className="w-2.5 h-2.5 text-slate-400 pointer-events-none absolute right-0" />
               </div>
@@ -345,7 +321,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 title="Actualizar lista de remates"
                 className="text-slate-400 hover:text-cyan-400 p-1 rounded-lg hover:bg-slate-800 transition"
               >
-                <RefreshCw className={`w-3 h-3 ${cargandoRemates ? 'animate-spin text-cyan-400' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${cargandoRemates ? 'animate-spin' : ''}`} />
               </button>
               <span className="text-[10px] bg-slate-800/80 text-slate-400 px-2 py-0.5 rounded-full font-semibold">
                 {rematesFiltrados.length}
