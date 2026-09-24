@@ -11,7 +11,7 @@ from src.infrastructure.laya_triage_client import LayaTriageClient
 class CazarRematesService:
     """
     Servicio de aplicación encargado de orquestar la descarga, parseo, filtrado,
-    triage de Sistema 1 y persistencia con deduplicación de edictos de remate.
+    triage multidimensional de Sistema 1 y persistencia con deduplicación de edictos de remate.
     """
 
     def __init__(
@@ -31,7 +31,7 @@ class CazarRematesService:
     ) -> tuple[List[EdictoRemate], int]:
         """
         Descarga y extrae los edictos de remate de una fecha específica.
-        Aplica filtro geográfico y triage de Sistema 1 (descarta vehículos).
+        Aplica filtro geográfico y triage de Sistema 1 en 5 dimensiones.
         Retorna (lista_detectados, cantidad_nuevos_guardados).
         """
         if fecha.weekday() >= 5:
@@ -48,10 +48,10 @@ class CazarRematesService:
             if canton_filtro and not self.parser.es_de_canton(bloque, canton_filtro):
                 continue
 
-            # Triage inteligente con Sistema 1
-            triage = self.triage_client.clasificar_edicto(bloque)
+            # Triage holístico con Laya (Sistema 1)
+            triage = self.triage_client.clasificar_inmueble(bloque)
             if not triage.es_inmueble:
-                # Omitir vehículos o muebles
+                # Descartar vehículos o bienes muebles
                 continue
 
             edicto = self.parser.parsear_texto_edicto(bloque)
@@ -60,7 +60,12 @@ class CazarRematesService:
                 edicto.tipo_bien = triage.tipo_bien.value
                 edicto.origen_deuda = triage.origen_deuda.value
                 edicto.es_morosidad_municipal = triage.es_morosidad_municipal
+                edicto.tipo_oportunidad = triage.tipo_oportunidad.value
+                edicto.viabilidad_saneamiento = triage.viabilidad_saneamiento.value
+                edicto.tiene_gravamen_bloqueante = triage.tiene_gravamen_bloqueante
+                edicto.detalles_bloqueo = triage.detalles_bloqueo
                 edicto.urgencia = triage.urgencia.value
+                edicto.score_inversion = triage.score_inversion
                 edictos.append(edicto)
 
         nuevos = 0

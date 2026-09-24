@@ -181,6 +181,36 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
                 <span className="font-mono text-slate-300">{props.expediente}</span>
               </div>
             )}
+            {/* Dimensiones de Inteligencia Laya */}
+            {props.tipo_oportunidad && (
+              <div className="col-span-2 pt-2 border-t border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 text-[10px]">Evaluación de Sistema 1:</span>
+                  {props.score_inversion && (
+                    <span className="text-[10px] font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                      Score: {props.score_inversion}/5
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">Tipología de Oportunidad:</span>
+                  <span className="font-semibold text-emerald-400">{props.tipo_oportunidad}</span>
+                </div>
+                {props.viabilidad_saneamiento && (
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">Viabilidad Saneamiento:</span>
+                    <span className={`font-semibold ${props.viabilidad_saneamiento === 'ALTA' ? 'text-emerald-400' : props.viabilidad_saneamiento === 'MEDIA' ? 'text-amber-400' : 'text-rose-400'}`}>
+                      {props.viabilidad_saneamiento}
+                    </span>
+                  </div>
+                )}
+                {props.detalles_bloqueo && (
+                  <p className="text-[10px] text-rose-300 bg-rose-500/10 p-1.5 rounded border border-rose-500/20 mt-1">
+                    ⚠ {props.detalles_bloqueo}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

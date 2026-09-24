@@ -380,6 +380,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <span>{r.folio_real}</span>
                       </span>
                       <div className="flex space-x-1">
+                        {r.score_inversion && r.score_inversion >= 4 && (
+                          <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-bold border border-emerald-500/30">
+                            ★ {r.score_inversion}/5
+                          </span>
+                        )}
                         {r.es_morosidad_municipal && (
                           <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-bold border border-amber-500/20">
                             Municipal

@@ -48,8 +48,14 @@ class EdictoRemate(BaseModel):
     base: BaseRemate
     fechas_subasta: List[datetime] = Field(default_factory=list)
     texto_original: str
-    # Enriquecimiento del modelo de Sistema 1 (Triage)
+
+    # Dimensiones de Decisión de Sistema 1 (Laya)
     tipo_bien: str = "INMUEBLE"
     origen_deuda: str = "BANCARIO"
     es_morosidad_municipal: bool = False
+    tipo_oportunidad: str = "ESTANDAR"
+    viabilidad_saneamiento: str = "ALTA"
+    tiene_gravamen_bloqueante: bool = False
+    detalles_bloqueo: Optional[str] = None
     urgencia: str = "PRIMERA"
+    score_inversion: int = 3

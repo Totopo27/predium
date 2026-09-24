@@ -1,41 +1,61 @@
 import pytest
 from src.infrastructure.laya_triage_client import LayaTriageClient
-from src.domain.triage_models import TipoBienClasificado, OrigenDeudaClasificado, UrgenciaSubasta
+from src.domain.triage_models import (
+    TipoBienClasificado,
+    OrigenDeudaClasificado,
+    UrgenciaSubasta,
+    TipoOportunidadNegocio,
+    ViabilidadSaneamiento,
+)
 
 
-def test_triage_finca_municipal():
+def test_triage_abandono_fiscal_score_alto():
     texto = """
-    En este Despacho, con la base de quince millones de colones, sáquese a remate la finca del partido de Alajuela, matrícula 245123-000. Se remata en proceso de cobro judicial de Municipalidad de Zarcero contra Contribuyente Moroso por impuestos de bienes inmuebles.
+    En este Despacho, con la base de quince millones de colones, sáquese a remate la finca del partido de Alajuela, matrícula 245123-000. Se remata en proceso de cobro judicial de Municipalidad de Zarcero contra Contribuyente Moroso por impuestos de bienes inmuebles impagos por 5 años.
     """
     client = LayaTriageClient(usar_modelo_local=False)
-    res = client.clasificar_edicto(texto)
+    res = client.clasificar_inmueble(texto)
 
-    assert res.tipo_bien == TipoBienClasificado.INMUEBLE
     assert res.es_inmueble is True
-    assert res.origen_deuda == OrigenDeudaClasificado.MUNICIPAL
     assert res.es_morosidad_municipal is True
-    assert res.urgencia == UrgenciaSubasta.PRIMERA
+    assert res.tipo_oportunidad == TipoOportunidadNegocio.ABANDONO_FISCAL
+    assert res.viabilidad_saneamiento == ViabilidadSaneamiento.ALTA
+    assert res.score_inversion >= 4
 
 
-def test_triage_vehiculo_para_descarte():
+def test_triage_vulnerabilidad_usufructo():
     texto = """
-    A las ocho horas del 15 de mayo remataré: vehículo marca Hyundai, estilo Elantra, placas 493857, chasis KMHJF31JPMU, en proceso prendario de Banco X contra Propietario.
+    Finca en San Ramón a nombre de adulto mayor, soportando usufructo vitalicio. Requiere venta de nuda propiedad para costear albergue.
     """
     client = LayaTriageClient(usar_modelo_local=False)
-    res = client.clasificar_edicto(texto)
-
-    assert res.tipo_bien == TipoBienClasificado.VEHICULO
-    assert res.es_inmueble is False
-
-
-def test_triage_usufructo_y_tercera_subasta():
-    texto = """
-    Sáquese a remate la finca matrícula 2-998877-000 soportando usufructo vitalicio. Para la tercera subasta se señalan las 10 horas con la base del 25% por ejecución de Banco Nacional.
-    """
-    client = LayaTriageClient(usar_modelo_local=False)
-    res = client.clasificar_edicto(texto)
+    res = client.clasificar_inmueble(texto)
 
     assert res.es_inmueble is True
-    assert res.riesgo_gravamen_complejo is True
-    assert res.probabilidad_riesgo > 0.5
-    assert res.urgencia == UrgenciaSubasta.TERCERA
+    assert res.tipo_oportunidad == TipoOportunidadNegocio.VULNERABILIDAD_PATRIMONIAL
+    assert res.viabilidad_saneamiento == ViabilidadSaneamiento.MEDIA
+    assert res.tiene_gravamen_bloqueante is True
+    assert "Nuda Propiedad" in str(res.detalles_bloqueo)
+
+
+def test_triage_liquidacion_bancaria_con_descuento():
+    texto = """
+    Terreno adjudicado por Banco de Costa Rica BCR en San Ramón BCR-BA1027710922 con 40% de descuento sobre avalúo.
+    """
+    client = LayaTriageClient(usar_modelo_local=False)
+    res = client.clasificar_inmueble(texto, porcentaje_descuento=40.0)
+
+    assert res.es_inmueble is True
+    assert res.tipo_oportunidad == TipoOportunidadNegocio.LIQUIDACION_BANCARIA
+    assert res.score_inversion >= 4
+
+
+def test_triage_riesgo_severo_banhvi():
+    texto = """
+    Inmueble con gravamen de limitación por Bono Familiar de Vivienda (BANHVI Ley 7052) vigente por 10 años.
+    """
+    client = LayaTriageClient(usar_modelo_local=False)
+    res = client.clasificar_inmueble(texto)
+
+    assert res.viabilidad_saneamiento == ViabilidadSaneamiento.BAJA
+    assert res.tiene_gravamen_bloqueante is True
+    assert res.score_inversion <= 2

@@ -58,7 +58,12 @@ class SqliteRemateRepository(RemateRepository):
                     tipo_bien TEXT DEFAULT 'INMUEBLE',
                     origen_deuda TEXT DEFAULT 'BANCARIO',
                     es_morosidad_municipal INTEGER DEFAULT 0,
+                    tipo_oportunidad TEXT DEFAULT 'ESTANDAR',
+                    viabilidad_saneamiento TEXT DEFAULT 'ALTA',
+                    tiene_gravamen_bloqueante INTEGER DEFAULT 0,
+                    detalles_bloqueo TEXT,
                     urgencia TEXT DEFAULT 'PRIMERA',
+                    score_inversion INTEGER DEFAULT 3,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(folio_real, expediente)
@@ -68,19 +73,26 @@ class SqliteRemateRepository(RemateRepository):
 
             # Migraciones no destructivas para bases de datos existentes
             columnas_existentes = [r[1] for r in cursor.execute("PRAGMA table_info(remates)").fetchall()]
-            if "tipo_bien" not in columnas_existentes:
-                cursor.execute("ALTER TABLE remates ADD COLUMN tipo_bien TEXT DEFAULT 'INMUEBLE'")
-            if "origen_deuda" not in columnas_existentes:
-                cursor.execute("ALTER TABLE remates ADD COLUMN origen_deuda TEXT DEFAULT 'BANCARIO'")
-            if "es_morosidad_municipal" not in columnas_existentes:
-                cursor.execute("ALTER TABLE remates ADD COLUMN es_morosidad_municipal INTEGER DEFAULT 0")
-            if "urgencia" not in columnas_existentes:
-                cursor.execute("ALTER TABLE remates ADD COLUMN urgencia TEXT DEFAULT 'PRIMERA'")
+            nuevas_columnas = {
+                "tipo_bien": "TEXT DEFAULT 'INMUEBLE'",
+                "origen_deuda": "TEXT DEFAULT 'BANCARIO'",
+                "es_morosidad_municipal": "INTEGER DEFAULT 0",
+                "tipo_oportunidad": "TEXT DEFAULT 'ESTANDAR'",
+                "viabilidad_saneamiento": "TEXT DEFAULT 'ALTA'",
+                "tiene_gravamen_bloqueante": "INTEGER DEFAULT 0",
+                "detalles_bloqueo": "TEXT",
+                "urgencia": "TEXT DEFAULT 'PRIMERA'",
+                "score_inversion": "INTEGER DEFAULT 3",
+            }
+            for col, definicion in nuevas_columnas.items():
+                if col not in columnas_existentes:
+                    cursor.execute(f"ALTER TABLE remates ADD COLUMN {col} {definicion}")
 
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_remates_canton ON remates(canton)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_remates_folio ON remates(folio_real)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_remates_estado ON remates(estado)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_remates_municipal ON remates(es_morosidad_municipal)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_remates_oportunidad ON remates(tipo_oportunidad)")
             conn.commit()
         finally:
             conn.close()
@@ -97,8 +109,10 @@ class SqliteRemateRepository(RemateRepository):
                     plano_catastrado, provincia, canton, distrito, expediente,
                     juzgado, acreedor, demandado, moneda, monto_base,
                     monto_segundo_remate, monto_tercer_remate, fecha_publicacion,
-                    texto_original, tipo_bien, origen_deuda, es_morosidad_municipal, urgencia
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    texto_original, tipo_bien, origen_deuda, es_morosidad_municipal,
+                    tipo_oportunidad, viabilidad_saneamiento, tiene_gravamen_bloqueante,
+                    detalles_bloqueo, urgencia, score_inversion
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     edicto.id_edicto,
@@ -123,7 +137,12 @@ class SqliteRemateRepository(RemateRepository):
                     edicto.tipo_bien,
                     edicto.origen_deuda,
                     1 if edicto.es_morosidad_municipal else 0,
+                    edicto.tipo_oportunidad,
+                    edicto.viabilidad_saneamiento,
+                    1 if edicto.tiene_gravamen_bloqueante else 0,
+                    edicto.detalles_bloqueo,
                     edicto.urgencia,
+                    edicto.score_inversion,
                 ),
             )
             conn.commit()
@@ -174,7 +193,12 @@ class SqliteRemateRepository(RemateRepository):
             tipo_bien=row["tipo_bien"] if "tipo_bien" in row.keys() else "INMUEBLE",
             origen_deuda=row["origen_deuda"] if "origen_deuda" in row.keys() else "BANCARIO",
             es_morosidad_municipal=bool(row["es_morosidad_municipal"]) if "es_morosidad_municipal" in row.keys() else False,
+            tipo_oportunidad=row["tipo_oportunidad"] if "tipo_oportunidad" in row.keys() else "ESTANDAR",
+            viabilidad_saneamiento=row["viabilidad_saneamiento"] if "viabilidad_saneamiento" in row.keys() else "ALTA",
+            tiene_gravamen_bloqueante=bool(row["tiene_gravamen_bloqueante"]) if "tiene_gravamen_bloqueante" in row.keys() else False,
+            detalles_bloqueo=row["detalles_bloqueo"] if "detalles_bloqueo" in row.keys() else None,
             urgencia=row["urgencia"] if "urgencia" in row.keys() else "PRIMERA",
+            score_inversion=int(row["score_inversion"]) if "score_inversion" in row.keys() else 3,
         )
 
     def listar(
@@ -221,7 +245,7 @@ class SqliteRemateRepository(RemateRepository):
             query += " AND estado = ?"
             params.append(estado.upper())
 
-        query += " ORDER BY id DESC LIMIT ?"
+        query += " ORDER BY score_inversion DESC, id DESC LIMIT ?"
         params.append(limite)
 
         conn = self._get_connection()

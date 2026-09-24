@@ -213,6 +213,10 @@ export const App: React.FC = () => {
         monto_base: `${r.moneda} ${r.monto_base.toLocaleString()}`,
         distrito: r.distrito,
         plano: r.plano,
+        tipo_oportunidad: r.tipo_oportunidad,
+        viabilidad_saneamiento: r.viabilidad_saneamiento,
+        detalles_bloqueo: r.detalles_bloqueo,
+        score_inversion: r.score_inversion,
       },
     });
 

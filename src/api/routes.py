@@ -44,7 +44,12 @@ def listar_remates(
             "tipo_bien": r.tipo_bien,
             "origen_deuda": r.origen_deuda,
             "es_morosidad_municipal": r.es_morosidad_municipal,
+            "tipo_oportunidad": r.tipo_oportunidad,
+            "viabilidad_saneamiento": r.viabilidad_saneamiento,
+            "tiene_gravamen_bloqueante": r.tiene_gravamen_bloqueante,
+            "detalles_bloqueo": r.detalles_bloqueo,
             "urgencia": r.urgencia,
+            "score_inversion": r.score_inversion,
         }
         for r in remates
     ]

@@ -13,7 +13,12 @@ export interface Remate {
   monto_tercero?: number;
   fecha_publicacion?: string;
   es_morosidad_municipal?: boolean;
-  urgencia?: 'PRIMERA' | 'SEGUNDA' | 'TERCERA';
+  tipo_oportunidad?: string;
+  viabilidad_saneamiento?: 'ALTA' | 'MEDIA' | 'BAJA';
+  tiene_gravamen_bloqueante?: boolean;
+  detalles_bloqueo?: string;
+  urgencia?: 'PRIMERA' | 'SEGUNDA' | 'TERCERA' | 'VENTA_DIRECTA';
+  score_inversion?: number;
 }
 
 export interface BienAdjudicado {
