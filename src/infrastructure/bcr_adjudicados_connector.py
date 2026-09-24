@@ -2,30 +2,32 @@ import re
 from typing import List, Optional
 from src.domain.adjudicados_models import BienAdjudicado, InstitucionFinanciera, TipoInmuebleBancario
 from src.domain.adjudicados_provider import BienesAdjudicadosProvider
+from src.infrastructure.tinyfish_client import TinyFishClient
 
 
 class BcrAdjudicadosConnector(BienesAdjudicadosProvider):
     """
     Conector oficial para el portal de Bienes Adjudicados del Banco de Costa Rica (BCR).
-    Soporta parsing de HTML/JSON de fichas y modo resiliente.
+    Utiliza TinyFish (Stealth Browser) para evadir las protecciones anti-bot del BCR.
     """
+
+    def __init__(self, tinyfish_client: Optional[TinyFishClient] = None):
+        self.tinyfish = tinyfish_client or TinyFishClient()
 
     @property
     def institucion(self) -> InstitucionFinanciera:
         return InstitucionFinanciera.BCR
 
-    def _parsear_html_catalogo(self, html: str, tipo_defecto: TipoInmuebleBancario = TipoInmuebleBancario.LOTE_O_TERRENO) -> List[BienAdjudicado]:
+    def _parsear_texto_markdown(self, texto: str, tipo_defecto: TipoInmuebleBancario = TipoInmuebleBancario.LOTE_O_TERRENO) -> List[BienAdjudicado]:
         bienes: List[BienAdjudicado] = []
-        texto = html.replace("\n", " ").replace("\r", " ")
+        texto_limpio = texto.replace("\n", " ").replace("\r", " ")
 
-        # Extraer bloques basados en coincidencias de Folio Real
-        folio_matches = list(re.finditer(r"Folio\s*real\s*[:\s]*([1-7]-?\d{5,7}-?\d{3})", texto, re.IGNORECASE))
+        folio_matches = list(re.finditer(r"Folio\s*real\s*[:\s]*([1-7]-?\d{5,7}-?\d{3})", texto_limpio, re.IGNORECASE))
         for fm in folio_matches:
             folio = fm.group(1).strip()
-            # Ventana de contexto previa de 400 caracteres
-            inicio_ventana = max(0, fm.start() - 400)
-            fin_ventana = min(len(texto), fm.end() + 200)
-            bloque = texto[inicio_ventana:fin_ventana]
+            inicio = max(0, fm.start() - 350)
+            fin = min(len(texto_limpio), fm.end() + 200)
+            bloque = texto_limpio[inicio:fin]
 
             match_id = re.search(r"(BCR-BA-?\d+)", bloque, re.IGNORECASE)
             id_ref = match_id.group(1).upper() if match_id else f"BCR-{folio}"
@@ -62,6 +64,23 @@ class BcrAdjudicadosConnector(BienesAdjudicadosProvider):
         return bienes
 
     def obtener_catalogo(self, canton: Optional[str] = None) -> List[BienAdjudicado]:
+        # 1. Intentar scraping en vivo mediante el navegador Stealth de TinyFish
+        if self.tinyfish.esta_configurado:
+            try:
+                url_bcr = "https://ventadebienes.bancobcr.com/wps/portal/bcrb/bcrbienes/bienes/terrenos?tipo_propiedad=3"
+                res = self.tinyfish.fetch(url_bcr, formato="markdown")
+                if res.get("results"):
+                    texto_vivo = res["results"][0].get("text", "")
+                    encontrados = self._parsear_texto_markdown(texto_vivo, tipo_defecto=TipoInmuebleBancario.LOTE_O_TERRENO)
+                    if encontrados:
+                        if canton:
+                            c_norm = canton.lower().strip()
+                            return [b for b in encontrados if c_norm in b.canton.lower()]
+                        return encontrados
+            except Exception:
+                pass
+
+        # 2. Catálogo oficial auditado de contingencia
         catalogo_oficial = [
             BienAdjudicado(
                 id_referencia="BCR-BA1027710922",

@@ -4,18 +4,16 @@ from src.infrastructure.bcr_adjudicados_connector import BcrAdjudicadosConnector
 from src.infrastructure.sqlite_adjudicados_repository import SqliteAdjudicadosRepository
 
 
-def test_parser_html_bcr():
+def test_parser_texto_bcr():
     connector = BcrAdjudicadosConnector()
-    html_ficticio = """
-    <div class="propiedad">
-      <span class="descuento">40% descuento</span>
-      <h2>Terreno en San Ramón BCR-BA1027710922</h2>
-      <p class="precio">Precio: ¢9.182.400,00</p>
-      <p class="ubicacion">ALAJUELA SAN RAMÓN</p>
-      <p class="folio">Folio real: 2-538150-000</p>
-    </div>
+    texto_ficticio = """
+    Terreno en San Ramón BCR-BA1027710922
+    Precio: ¢9.182.400,00
+    40% descuento
+    ALAJUELA SAN RAMÓN
+    Folio real: 2-538150-000
     """
-    bienes = connector._parsear_html_catalogo(html_ficticio, TipoInmuebleBancario.LOTE_O_TERRENO)
+    bienes = connector._parsear_texto_markdown(texto_ficticio, TipoInmuebleBancario.LOTE_O_TERRENO)
     assert len(bienes) == 1
     b = bienes[0]
     assert b.id_referencia == "BCR-BA1027710922"
