@@ -38,6 +38,25 @@ export interface BienAdjudicado {
   url_publicacion?: string;
 }
 
+export interface FincaInvisible {
+  folio_real: string;
+  origen: string;
+  tipo_inmueble: string;
+  canton: string;
+  distrito: string;
+  precio_referencia: string;
+  descuento: number;
+  estado_wfs: string;
+  tipo_oportunidad: string;
+  viabilidad_saneamiento: string;
+  detalles_saneamiento: string;
+  score_inversion: number;
+  url_publicacion?: string;
+  expediente?: string;
+  vacio_asociado?: any;
+  vecinos_colindantes?: string[];
+}
+
 export interface PredioPropiedades {
   finca: string;
   plano?: string;

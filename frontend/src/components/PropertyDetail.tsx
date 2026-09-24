@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Scale, ShieldAlert, CheckCircle2, LocateFixed, HelpCircle, Landmark, ExternalLink, Percent } from 'lucide-react';
+import { X, Scale, ShieldAlert, CheckCircle2, LocateFixed, HelpCircle, Landmark, ExternalLink, Percent, EyeOff } from 'lucide-react';
 import type { DiagnosticoPatrimonial } from '../types';
 
 interface PropertyDetailProps {
@@ -16,7 +16,6 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
   const [diagnostico, setDiagnostico] = useState<DiagnosticoPatrimonial | null>(null);
   const [cargandoDiag, setCargandoDiag] = useState(false);
 
-  // Reiniciar estado de diagnóstico cuando cambia la propiedad seleccionada
   useEffect(() => {
     setDiagnostico(null);
   }, [featureData]);
@@ -25,8 +24,11 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
   const esRemate = props.tipo === 'REMATE';
   const esVacio = props.tipo === 'VACIO_CATASTRAL';
   const esAdjudicado = props.tipo === 'ADJUDICADO_BANCARIO';
-  const noDigitalizado = props.tipo === 'PREDIO_NO_DIGITALIZADO';
+  const esInvisible = props.tipo === 'PREDIO_NO_DIGITALIZADO';
   const folio = props.folio_real || (props.finca ? `2-${props.finca}-000` : null);
+
+  const vacioAsociado = props.vacio_asociado;
+  const vecinos = props.vecinos_colindantes || [];
 
   const ejecutarDiagnostico = async () => {
     if (!folio) return;
@@ -50,13 +52,15 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
           <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded border ${
             esVacio
               ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+              : esInvisible
+              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
               : esAdjudicado
               ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
               : esRemate
               ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
               : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
           }`}>
-            {esVacio ? 'Vacío Catastral' : esAdjudicado ? `Adjudicado (${props.institucion})` : esRemate ? 'Edicto de Remate' : noDigitalizado ? 'Predio Registral' : 'Predio Catastrado'}
+            {esVacio ? 'Vacío Catastral' : esInvisible ? 'Finca No Georreferenciada' : esAdjudicado ? `Adjudicado (${props.institucion})` : esRemate ? 'Edicto de Remate' : 'Predio Catastrado'}
           </span>
           <h2 className="text-base font-bold text-slate-100 mt-1">
             {esVacio ? props.id_vacio : folio || props.finca || 'Inmueble'}
@@ -106,6 +110,80 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
               <span>Ver Vacío en el Mapa</span>
             </button>
           </div>
+        ) : esInvisible ? (
+          /* FICHA ESPECIALIZADA: FINCA NO GEORREFERENCIADA / CANDIDATA A SANEAMIENTO */
+          <div className="space-y-2.5">
+            <div className="p-3 bg-amber-950/20 rounded-xl border border-amber-500/30 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-amber-300 font-bold flex items-center space-x-1.5">
+                  <EyeOff className="w-3.5 h-3.5" />
+                  <span>{props.origen || 'Origen Registral'}</span>
+                </span>
+                {props.score_inversion && (
+                  <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-bold border border-amber-500/30">
+                    Score: {props.score_inversion}/5
+                  </span>
+                )}
+              </div>
+
+              <div className="pt-1 border-t border-amber-500/20">
+                <span className="text-slate-400 block text-[10px]">Precio / Base de Referencia</span>
+                <span className="font-extrabold text-base text-slate-100">{props.monto_base || 'No especificado'}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 pt-1 text-[11px]">
+                <div><span className="text-slate-500">Cantón:</span> {props.canton}</div>
+                <div><span className="text-slate-500">Distrito:</span> {props.distrito}</div>
+                <div><span className="text-slate-500">Viabilidad:</span> <strong className="text-amber-400">{props.viabilidad_saneamiento || 'MEDIA'}</strong></div>
+                <div><span className="text-slate-500">Estado WFS:</span> <span className="text-rose-400 font-semibold">Invisible</span></div>
+              </div>
+            </div>
+
+            {/* VINCULACIÓN CON VACÍO CATASTRAL CANDIDATO */}
+            {vacioAsociado ? (
+              <div className="p-3 bg-slate-900/90 rounded-xl border border-amber-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-amber-300 font-bold text-[11px] flex items-center space-x-1">
+                    <LocateFixed className="w-3 h-3" />
+                    <span>Vacío Catastral Correspondiente</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400">{vacioAsociado.area_m2?.toLocaleString()} m²</span>
+                </div>
+                <p className="text-[11px] text-slate-300">
+                  <span className="text-slate-500">Zona detectada:</span> {vacioAsociado.distrito} ({vacioAsociado.id_vacio})
+                </p>
+                {vecinos.length > 0 && (
+                  <p className="text-[10px] text-slate-400">
+                    <span className="text-slate-500">Vecinos Registrados:</span> {vecinos.join(', ')}
+                  </p>
+                )}
+                <button
+                  onClick={() => onCentrarEnMapa({ type: 'Feature', geometry: vacioAsociado.geometry, properties: vacioAsociado })}
+                  className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-1.5 px-3 rounded-lg text-xs flex items-center justify-center space-x-1 shadow-sm transition"
+                >
+                  <LocateFixed className="w-3 h-3" />
+                  <span>Ver Vacío Asociado en Mapa</span>
+                </button>
+              </div>
+            ) : (
+              <div className="p-2.5 bg-slate-900/60 rounded-xl border border-slate-800 text-[11px] text-slate-400 flex items-start space-x-2">
+                <HelpCircle className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
+                <span>Esta finca tiene matrícula y proceso activo pero no está georreferenciada. Ejecutá 'Detectar Vacíos' para vincularla con su polígono físico.</span>
+              </div>
+            )}
+
+            {props.url_publicacion && (
+              <a
+                href={props.url_publicacion}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold py-2 px-3 rounded-xl text-xs flex items-center justify-center space-x-1.5 transition"
+              >
+                <span>Ver Publicación Oficial</span>
+                <ExternalLink className="w-3 h-3 text-slate-400" />
+              </a>
+            )}
+          </div>
         ) : esAdjudicado ? (
           <div className="space-y-2.5">
             <div className="p-3 bg-purple-950/20 rounded-xl border border-purple-500/30 space-y-2">
@@ -138,7 +216,6 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
               </div>
             </div>
 
-            {/* Si ya tenemos el polígono catastral vinculado */}
             {props.area_registro_m2 && (
               <div className="grid grid-cols-2 gap-2 p-2.5 bg-slate-900/60 rounded-xl border border-slate-800 text-[11px]">
                 <div><span className="text-slate-500">Área Catastral:</span> {props.area_registro_m2} m²</div>

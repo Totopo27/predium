@@ -24,7 +24,6 @@ class LayaTriageClient:
         if self.usar_modelo_local:
             try:
                 import laya
-                # Cargar el agente multilingüe descargado en disco (~647 MB)
                 self.agent = laya.load("convaiinnovations/laya", subfolder="multilingual")
             except Exception:
                 self.agent = None
@@ -35,19 +34,20 @@ class LayaTriageClient:
         precio_actual: Optional[float] = None,
         precio_original: Optional[float] = None,
         porcentaje_descuento: float = 0.0,
+        no_georreferenciada_wfs: bool = False,
     ) -> ResultadoTriageAvanzado:
         """
-        Evalúa un inmueble en 5 dimensiones estratégicas usando el modelo de Sistema 1.
+        Evalúa un inmueble en 6 dimensiones estratégicas usando el modelo de Sistema 1,
+        identificando candidatas a saneamiento si no existen en el mapa WFS digital.
         """
         t0 = time.perf_counter()
 
         if self.agent:
-            return self._clasificar_con_laya(texto, t0, precio_actual, precio_original, porcentaje_descuento)
+            return self._clasificar_con_laya(texto, t0, precio_actual, precio_original, porcentaje_descuento, no_georreferenciada_wfs)
 
-        return self._clasificar_heuristico(texto, t0, precio_actual, precio_original, porcentaje_descuento)
+        return self._clasificar_heuristico(texto, t0, precio_actual, precio_original, porcentaje_descuento, no_georreferenciada_wfs)
 
     def clasificar_edicto(self, texto_edicto: str) -> ResultadoTriageAvanzado:
-        """Alias retrocompatible para llamadas desde el extractor del Boletín Judicial."""
         return self.clasificar_inmueble(texto_edicto)
 
     def _clasificar_con_laya(
@@ -57,8 +57,8 @@ class LayaTriageClient:
         precio_actual: Optional[float] = None,
         precio_original: Optional[float] = None,
         porcentaje_descuento: float = 0.0,
+        no_georreferenciada_wfs: bool = False,
     ) -> ResultadoTriageAvanzado:
-        # Schema de preguntas atómicas en un solo forward pass (<35ms)
         questions = {
             "tipo_bien": {
                 "type": "choice",
@@ -83,6 +83,7 @@ class LayaTriageClient:
                 "instructions": "¿Cuál es la tipología de oportunidad de negocio patrimonial que presenta este bien?",
                 "criteria": {
                     "abandono_fiscal": "Deuda o remate municipal por impuestos no pagados",
+                    "finca_no_georreferenciada": "Inmueble con título o plano antiguo sin incorporación al catastro digital",
                     "liquidacion_bancaria": "Bien adjudicado en venta por banco con descuento o financiamiento",
                     "vulnerabilidad_patrimonial": "Presencia de usufructo vitalicio, persona adulta mayor o proceso sucesorio",
                     "litigio_complejo": "Múltiples embargos, demandas judiciales o tercerías en trámite",
@@ -115,6 +116,8 @@ class LayaTriageClient:
         conf_origen = answers.get("origen_deuda", {}).get("confidence", 0.88)
 
         oportunidad_str = answers.get("tipo_oportunidad", {}).get("choice", "estandar").upper()
+        if no_georreferenciada_wfs and oportunidad_str == "ESTANDAR":
+            oportunidad_str = "FINCA_NO_GEORREFERENCIADA"
 
         prob_bloqueo = float(answers.get("riesgo_bloqueante", {}).get("noul", 0.1))
         tiene_bloqueo = prob_bloqueo > 0.55
@@ -125,6 +128,9 @@ class LayaTriageClient:
         if tiene_bloqueo and ("bono" in texto.lower() or "banhvi" in texto.lower()):
             viabilidad = ViabilidadSaneamiento.BAJA
             detalles_bloqueo = "Gravamen por Bono Familiar de Vivienda (BANHVI Ley 7052)"
+        elif no_georreferenciada_wfs:
+            viabilidad = ViabilidadSaneamiento.MEDIA
+            detalles_bloqueo = "Propiedad invisible en WFS municipal: requiere agrimensura y actualización cartográfica de linderos"
         elif tiene_bloqueo or oportunidad_str == "VULNERABILIDAD_PATRIMONIAL":
             viabilidad = ViabilidadSaneamiento.MEDIA
             detalles_bloqueo = "Requiere estructuración de Nuda Propiedad o trámite notarial de liquidación"
@@ -134,12 +140,12 @@ class LayaTriageClient:
 
         # Calcular Score de Inversión (1 a 5)
         score = 3
-        if oportunidad_str == "ABANDONO_FISCAL":
-            score += 1  # Oportunidad de oro para saneamiento previo
+        if oportunidad_str in ("ABANDONO_FISCAL", "FINCA_NO_GEORREFERENCIADA"):
+            score += 1
         if urgencia_str == "TERCERA" or porcentaje_descuento >= 40.0:
-            score += 1  # Alto descuento económico
+            score += 1
         if viabilidad == ViabilidadSaneamiento.BAJA:
-            score -= 2  # Penalizar riesgos severos
+            score -= 2
         score = max(1, min(5, score))
 
         tiempo_ms = (time.perf_counter() - t0) * 1000.0
@@ -152,8 +158,10 @@ class LayaTriageClient:
             confianza_origen=float(conf_origen),
             es_morosidad_municipal=origen_str == "MUNICIPAL",
             tipo_oportunidad=TipoOportunidadNegocio[oportunidad_str] if oportunidad_str in TipoOportunidadNegocio.__members__ else TipoOportunidadNegocio.ESTANDAR,
+            es_candidata_saneamiento=no_georreferenciada_wfs,
+            probabilidad_saneamiento_exitoso=0.88 if no_georreferenciada_wfs else 0.70,
             viabilidad_saneamiento=viabilidad,
-            tiene_gravamen_bloqueante=tiene_bloqueo,
+            tiene_gravamen_bloqueante=tiene_bloqueo or no_georreferenciada_wfs,
             probabilidad_bloqueo=prob_bloqueo,
             detalles_bloqueo=detalles_bloqueo,
             urgencia=UrgenciaSubasta[urgencia_str] if urgencia_str in UrgenciaSubasta.__members__ else UrgenciaSubasta.PRIMERA,
@@ -168,6 +176,7 @@ class LayaTriageClient:
         precio_actual: Optional[float] = None,
         precio_original: Optional[float] = None,
         porcentaje_descuento: float = 0.0,
+        no_georreferenciada_wfs: bool = False,
     ) -> ResultadoTriageAvanzado:
         texto_lower = texto.lower()
 
@@ -194,7 +203,9 @@ class LayaTriageClient:
             conf_origen = 0.75
 
         # 3. Oportunidad de Negocio
-        if origen == OrigenDeudaClasificado.MUNICIPAL:
+        if no_georreferenciada_wfs:
+            oportunidad = TipoOportunidadNegocio.FINCA_NO_GEORREFERENCIADA
+        elif origen == OrigenDeudaClasificado.MUNICIPAL:
             oportunidad = TipoOportunidadNegocio.ABANDONO_FISCAL
         elif "descuento" in texto_lower or "adjudicado" in texto_lower or porcentaje_descuento > 0:
             oportunidad = TipoOportunidadNegocio.LIQUIDACION_BANCARIA
@@ -208,12 +219,16 @@ class LayaTriageClient:
         # 4. Riesgos bloqueantes
         tiene_banhvi = bool(re.search(r"\b(?:bono|banhvi|ley\s*7052)\b", texto_lower))
         tiene_usufructo = "usufructo" in texto_lower
-        tiene_bloqueo = tiene_banhvi or tiene_usufructo
+        tiene_bloqueo = tiene_banhvi or tiene_usufructo or no_georreferenciada_wfs
 
         if tiene_banhvi:
             viabilidad = ViabilidadSaneamiento.BAJA
             detalles_bloqueo = "Afectación por Bono Familiar de Vivienda (BANHVI Ley 7052)"
             prob_bloqueo = 0.92
+        elif no_georreferenciada_wfs:
+            viabilidad = ViabilidadSaneamiento.MEDIA
+            detalles_bloqueo = "Finca no localizada en mapa digital WFS: requiere actualización de plano de agrimensura"
+            prob_bloqueo = 0.75
         elif tiene_usufructo:
             viabilidad = ViabilidadSaneamiento.MEDIA
             detalles_bloqueo = "Requiere estructuración de Nuda Propiedad respetando derecho vitalicio"
@@ -234,7 +249,7 @@ class LayaTriageClient:
             urgencia = UrgenciaSubasta.PRIMERA
 
         score = 3
-        if oportunidad == TipoOportunidadNegocio.ABANDONO_FISCAL:
+        if oportunidad in (TipoOportunidadNegocio.ABANDONO_FISCAL, TipoOportunidadNegocio.FINCA_NO_GEORREFERENCIADA):
             score += 1
         if urgencia == UrgenciaSubasta.TERCERA or porcentaje_descuento >= 40.0:
             score += 1
@@ -252,6 +267,8 @@ class LayaTriageClient:
             confianza_origen=conf_origen,
             es_morosidad_municipal=origen == OrigenDeudaClasificado.MUNICIPAL,
             tipo_oportunidad=oportunidad,
+            es_candidata_saneamiento=no_georreferenciada_wfs,
+            probabilidad_saneamiento_exitoso=0.88 if no_georreferenciada_wfs else 0.70,
             viabilidad_saneamiento=viabilidad,
             tiene_gravamen_bloqueante=tiene_bloqueo,
             probabilidad_bloqueo=prob_bloqueo,

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapView } from './components/Map';
 import { Sidebar } from './components/Sidebar';
 import { PropertyDetail } from './components/PropertyDetail';
-import type { Remate, BienAdjudicado, TerritorioInfo } from './types';
+import type { Remate, BienAdjudicado, FincaInvisible, TerritorioInfo } from './types';
 import { reproyectarGeoJson } from './lib/geo';
 
 interface Notificacion {
@@ -15,6 +15,7 @@ export const App: React.FC = () => {
   const [cantonActivo, setCantonActivo] = useState('Zarcero');
   const [remates, setRemates] = useState<Remate[]>([]);
   const [adjudicados, setAdjudicados] = useState<BienAdjudicado[]>([]);
+  const [invisibles, setInvisibles] = useState<FincaInvisible[]>([]);
   const [rematesGeoJson, setRematesGeoJson] = useState<any>(null);
   const [vaciosGeoJson, setVaciosGeoJson] = useState<any>(null);
   const [predioBuscadoGeoJson, setPredioBuscadoGeoJson] = useState<any>(null);
@@ -63,6 +64,16 @@ export const App: React.FC = () => {
       });
   };
 
+  const cargarInvisibles = (canton: string = cantonActivo) => {
+    fetch(`/api/fincas-invisibles?canton=${encodeURIComponent(canton)}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setInvisibles(Array.isArray(data) ? data : []))
+      .catch((err) => {
+        console.error('Error al cargar fincas invisibles:', err);
+        setInvisibles([]);
+      });
+  };
+
   useEffect(() => {
     fetch('/api/territorios')
       .then((res) => res.json())
@@ -75,12 +86,14 @@ export const App: React.FC = () => {
 
     cargarRemates('Zarcero');
     cargarAdjudicados('Zarcero');
+    cargarInvisibles('Zarcero');
   }, []);
 
   const handleCambiarCanton = (nuevoCanton: string) => {
     setCantonActivo(nuevoCanton);
     cargarRemates(nuevoCanton);
     cargarAdjudicados(nuevoCanton);
+    cargarInvisibles(nuevoCanton);
     setVaciosGeoJson({ type: 'FeatureCollection', features: [] });
     setSelectedFeature(null);
 
@@ -107,6 +120,7 @@ export const App: React.FC = () => {
       const res = await fetch(url, { method: 'POST' });
       const data = await res.json();
       cargarRemates(cantonActivo);
+      cargarInvisibles(cantonActivo);
 
       if (data.nuevos_guardados > 0) {
         mostrarNotificacion(
@@ -137,6 +151,7 @@ export const App: React.FC = () => {
       });
       const data = await res.json();
       cargarAdjudicados(cantonActivo);
+      cargarInvisibles(cantonActivo);
       mostrarNotificacion(
         'success',
         `Bancos sincronizados: ${data.total_encontrados} propiedades encontradas (${data.nuevos_guardados} nuevas).`
@@ -206,7 +221,6 @@ export const App: React.FC = () => {
     const numFinca = r.folio_real.split('-')[1];
     const cantonRemate = r.canton || cantonActivo;
 
-    // Preservar la identidad de REMATE como fuente de verdad
     const remateFeature = {
       type: 'Feature',
       properties: {
@@ -233,7 +247,6 @@ export const App: React.FC = () => {
           if (data) {
             const reproyectado = reproyectarGeoJson(data);
             setPredioBuscadoGeoJson(reproyectado);
-            // Fusionar los datos físicos del predio sin sobreescribir el tipo REMATE
             setSelectedFeature({
               ...reproyectado,
               properties: {
@@ -253,7 +266,6 @@ export const App: React.FC = () => {
     const numFinca = b.folio_real.split('-')[1];
     const cantonBien = b.canton || cantonActivo;
 
-    // Preservar la identidad de ADJUDICADO_BANCARIO como fuente de verdad
     const adjudicadoFeature = {
       type: 'Feature',
       properties: {
@@ -279,7 +291,6 @@ export const App: React.FC = () => {
           if (data) {
             const reproyectado = reproyectarGeoJson(data);
             setPredioBuscadoGeoJson(reproyectado);
-            // Fusionar geometría y métricas físicas sin destruir la ficha bancaria
             setSelectedFeature({
               ...reproyectado,
               properties: {
@@ -293,6 +304,28 @@ export const App: React.FC = () => {
         })
         .catch(() => {});
     }
+  };
+
+  const handleSelectInvisible = (f: FincaInvisible) => {
+    setSelectedFeature({
+      properties: {
+        tipo: 'PREDIO_NO_DIGITALIZADO',
+        folio_real: f.folio_real,
+        origen: f.origen,
+        tipo_inmueble: f.tipo_inmueble,
+        canton: f.canton,
+        distrito: f.distrito,
+        monto_base: f.precio_referencia,
+        descuento: f.descuento,
+        tipo_oportunidad: f.tipo_oportunidad,
+        viabilidad_saneamiento: f.viabilidad_saneamiento,
+        detalles_bloqueo: f.detalles_saneamiento,
+        score_inversion: f.score_inversion,
+        url_publicacion: f.url_publicacion,
+        expediente: f.expediente,
+        detalles: `${f.estado_wfs}. Esta propiedad cuenta con título formal o proceso cobratorio pero carece de polígono en el catastro digital municipal. Excelente candidata a saneamiento de linderos.`,
+      },
+    });
   };
 
   const handleSelectVacio = (vacioFeature: any) => {
@@ -327,12 +360,14 @@ export const App: React.FC = () => {
       <Sidebar
         remates={remates}
         adjudicados={adjudicados}
+        invisibles={invisibles}
         vaciosFeatures={vaciosGeoJson?.features || []}
         cantonActivo={cantonActivo}
         territorios={territorios}
         onCambiarCanton={handleCambiarCanton}
         onSelectRemate={handleSelectRemate}
         onSelectAdjudicado={handleSelectAdjudicado}
+        onSelectInvisible={handleSelectInvisible}
         onSelectVacio={handleSelectVacio}
         onBuscarFinca={handleBuscarFinca}
         onEjecutarGapAnalysis={handleEjecutarGapAnalysis}

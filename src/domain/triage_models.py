@@ -23,17 +23,18 @@ class UrgenciaSubasta(str, Enum):
 
 
 class TipoOportunidadNegocio(str, Enum):
-    ABANDONO_FISCAL = "ABANDONO_FISCAL"                # Cobro municipal de impuestos (IBI)
-    LIQUIDACION_BANCARIA = "LIQUIDACION_BANCARIA"      # Bien adjudicado por entidad financiera
+    ABANDONO_FISCAL = "ABANDONO_FISCAL"                        # Cobro municipal de impuestos (IBI)
+    LIQUIDACION_BANCARIA = "LIQUIDACION_BANCARIA"              # Bien adjudicado por entidad financiera
     VULNERABILIDAD_PATRIMONIAL = "VULNERABILIDAD_PATRIMONIAL"  # Usufructo / Adulto mayor / Sucesión
-    LITIGIO_COMPLEJO = "LITIGIO_COMPLEJO"              # Múltiples acreedores / embargos cruzados
+    LITIGIO_COMPLEJO = "LITIGIO_COMPLEJO"                      # Múltiples acreedores / embargos cruzados
+    FINCA_NO_GEORREFERENCIADA = "FINCA_NO_GEORREFERENCIADA"    # Finca invisible en WFS (candidata a saneamiento de linderos)
     ESTANDAR = "ESTANDAR"
 
 
 class ViabilidadSaneamiento(str, Enum):
     ALTA = "ALTA"      # Título expedito o gravamen cancelable con la subasta
-    MEDIA = "MEDIA"    # Requiere trámite notarial (nombramiento liquidador, prescripción)
-    BAJA = "BAJA"      # Afectaciones institucionales (BANHVI, patrimonio familiar sin acuerdo)
+    MEDIA = "MEDIA"    # Requiere trámite notarial / topográfico (localización de derechos, plano nuevo)
+    BAJA = "BAJA"      # Afectaciones institucionales severas (BANHVI, patrimonio familiar sin acuerdo)
 
 
 class ResultadoTriageAvanzado(BaseModel):
@@ -52,13 +53,17 @@ class ResultadoTriageAvanzado(BaseModel):
     tipo_oportunidad: TipoOportunidadNegocio
     confianza_oportunidad: float = Field(0.90, ge=0.0, le=1.0)
 
-    # 4. Viabilidad y Riesgos Bloqueantes
+    # 4. Estado Cartográfico y Candidata a Saneamiento
+    es_candidata_saneamiento: bool = Field(False, description="Finca con título/morosidad que no existe en el WFS digital")
+    probabilidad_saneamiento_exitoso: float = Field(0.85, ge=0.0, le=1.0)
+
+    # 5. Viabilidad y Riesgos Bloqueantes
     viabilidad_saneamiento: ViabilidadSaneamiento
     tiene_gravamen_bloqueante: bool
     probabilidad_bloqueo: float = Field(..., ge=0.0, le=1.0)
     detalles_bloqueo: Optional[str] = None
 
-    # 5. Nivel de Urgencia y Score de Inversión
+    # 6. Nivel de Urgencia y Score de Inversión
     urgencia: UrgenciaSubasta
     score_inversion: int = Field(..., ge=1, le=5, description="1: Poco atractiva, 5: Oportunidad de oro")
     tiempo_inferencia_ms: float

@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
-import { Search, MapPin, AlertTriangle, Building, Flame, Layers, Sparkles, HelpCircle, Eye, RefreshCw, Clock, ChevronDown, Landmark, Percent } from 'lucide-react';
-import type { Remate, BienAdjudicado, TerritorioInfo } from '../types';
+import { Search, MapPin, AlertTriangle, Building, Flame, Layers, Sparkles, HelpCircle, Eye, RefreshCw, Clock, ChevronDown, Landmark, Percent, EyeOff } from 'lucide-react';
+import type { Remate, BienAdjudicado, FincaInvisible, TerritorioInfo } from '../types';
 
 interface SidebarProps {
   remates: Remate[];
   adjudicados: BienAdjudicado[];
+  invisibles: FincaInvisible[];
   vaciosFeatures: any[];
   cantonActivo: string;
   territorios: TerritorioInfo[];
   onCambiarCanton: (canton: string) => void;
   onSelectRemate: (remate: Remate) => void;
   onSelectAdjudicado: (bien: BienAdjudicado) => void;
+  onSelectInvisible: (finca: FincaInvisible) => void;
   onSelectVacio: (vacioFeature: any) => void;
   onBuscarFinca: (fincaOPlano: string) => void;
   onEjecutarGapAnalysis: (distrito: string) => void;
@@ -25,12 +27,14 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   remates,
   adjudicados,
+  invisibles,
   vaciosFeatures,
   cantonActivo,
   territorios,
   onCambiarCanton,
   onSelectRemate,
   onSelectAdjudicado,
+  onSelectInvisible,
   onSelectVacio,
   onBuscarFinca,
   onEjecutarGapAnalysis,
@@ -44,7 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [terminoBusqueda, setTerminoBusqueda] = useState('');
   const [filtroGeneral, setFiltroGeneral] = useState('');
   const [distritoSeleccionado, setDistritoSeleccionado] = useState('TODOS');
-  const [tabOportunidades, setTabOportunidades] = useState<'remates' | 'bancos'>('remates');
+  const [tabOportunidades, setTabOportunidades] = useState<'remates' | 'bancos' | 'invisibles'>('remates');
 
   // Parámetros de Escaneo de Boletín
   const [modoEscaneo, setModoEscaneo] = useState<'dias' | 'fecha'>('dias');
@@ -86,6 +90,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       b.institucion.toLowerCase().includes(q) ||
       b.id_referencia.toLowerCase().includes(q) ||
       (b.distrito && b.distrito.toLowerCase().includes(q))
+    );
+  });
+
+  const invisiblesFiltrados = invisibles.filter((f) => {
+    if (!filtroGeneral.trim()) return true;
+    const q = filtroGeneral.toLowerCase();
+    return (
+      f.folio_real.toLowerCase().includes(q) ||
+      f.origen.toLowerCase().includes(q) ||
+      f.tipo_oportunidad.toLowerCase().includes(q)
     );
   });
 
@@ -151,7 +165,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </form>
 
-      {/* Acciones Rápidas: Detectar Vacíos & Escanear Boletín */}
+      {/* Acciones Rápidas: Detectar Vacíos & Escanear */}
       <div className="p-4 border-b border-slate-800/80 space-y-3">
         {/* BLOQUE VACÍOS */}
         <div className="space-y-1.5">
@@ -274,7 +288,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Lista con Scroll: Vacíos + Pestañas de Remates / Bancos */}
+      {/* Lista con Scroll: Vacíos + Pestañas (Remates / Bancos / No Georreferenciadas) */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* SECCIÓN VACÍOS DETECTADOS */}
         {vaciosFeatures && vaciosFeatures.length > 0 && (
@@ -325,12 +339,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* PESTAÑAS: REMATES JUDICIALES VS BIENES ADJUDICADOS BANCARIOS */}
+        {/* PESTAÑAS TRIPLES: REMATES VS BANCOS VS NO GEORREFERENCIADAS */}
         <div className="space-y-2.5">
-          <div className="flex bg-slate-900 p-0.5 rounded-xl border border-slate-800 text-[11px] font-bold">
+          <div className="flex bg-slate-900 p-0.5 rounded-xl border border-slate-800 text-[10px] font-bold">
             <button
               onClick={() => setTabOportunidades('remates')}
-              className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center space-x-1.5 ${
+              className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center space-x-1 ${
                 tabOportunidades === 'remates' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -339,12 +353,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
             <button
               onClick={() => setTabOportunidades('bancos')}
-              className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center space-x-1.5 ${
+              className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center space-x-1 ${
                 tabOportunidades === 'bancos' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <Landmark className="w-3 h-3" />
               <span>Bancos ({adjudicadosFiltrados.length})</span>
+            </button>
+            <button
+              onClick={() => setTabOportunidades('invisibles')}
+              className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center space-x-1 ${
+                tabOportunidades === 'invisibles' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <EyeOff className="w-3 h-3" />
+              <span>Invisibles ({invisiblesFiltrados.length})</span>
             </button>
           </div>
 
@@ -459,6 +482,54 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                     <p className="text-[10px] text-slate-400 truncate mt-1">
                       <span className="text-slate-500">Ref:</span> {b.id_referencia} · {b.tipo_inmueble}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {/* CONTENIDO PESTAÑA FINCAS NO GEORREFERENCIADAS (INVISIBLES) */}
+          {tabOportunidades === 'invisibles' && (
+            invisiblesFiltrados.length === 0 ? (
+              <div className="text-center py-6 text-slate-500 space-y-2">
+                <EyeOff className="w-5 h-5 mx-auto text-amber-500/60" />
+                <p className="text-xs">No hay fincas invisibles registradas en {cantonActivo}.<br/>Probá sincronizar bancos o escanear el boletín.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {invisiblesFiltrados.map((f, i) => (
+                  <div
+                    key={i}
+                    onClick={() => onSelectInvisible(f)}
+                    className="p-3 bg-amber-950/20 hover:bg-amber-950/30 border border-amber-500/30 hover:border-amber-400/60 rounded-xl cursor-pointer transition shadow-sm group"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-xs text-amber-300 group-hover:text-amber-200 transition flex items-center space-x-1">
+                        <EyeOff className="w-3 h-3 text-amber-400" />
+                        <span>{f.folio_real}</span>
+                      </span>
+                      <div className="flex items-center space-x-1">
+                        <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold border border-amber-500/30">
+                          ★ {f.score_inversion}/5
+                        </span>
+                        <span className="text-[9px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-semibold border border-slate-700">
+                          {f.viabilidad_saneamiento}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-baseline justify-between mt-1.5">
+                      <span className="text-xs font-extrabold text-slate-100">
+                        {f.precio_referencia}
+                      </span>
+                      <span className="text-[10px] text-slate-400 truncate max-w-[130px]">
+                        {f.origen}
+                      </span>
+                    </div>
+
+                    <p className="text-[10px] text-amber-400/80 truncate mt-1">
+                      {f.estado_wfs}
                     </p>
                   </div>
                 ))}

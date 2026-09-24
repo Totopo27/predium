@@ -5,6 +5,7 @@ from src.infrastructure.sqlite_repository import SqliteRemateRepository
 from src.infrastructure.sqlite_adjudicados_repository import SqliteAdjudicadosRepository
 from src.infrastructure.catastro_factory import CatastroResolver
 from src.infrastructure.registro_nacional_client import RegistroNacionalClient
+from src.infrastructure.laya_triage_client import LayaTriageClient
 from src.application.georreferenciar_service import GeorreferenciarService
 from src.application.gap_analysis_service import GapAnalysisService
 from src.application.orchestrator_service import OrchestratorService
@@ -67,6 +68,131 @@ def listar_bienes_adjudicados(
     inst_enum = InstitucionFinanciera(institucion) if institucion and institucion in InstitucionFinanciera.__members__ else None
     bienes = repo.listar(canton=canton, institucion=inst_enum, limite=limite)
     return [b.model_dump() for b in bienes]
+
+
+@api_router.get("/fincas-invisibles")
+def listar_fincas_no_georreferenciadas(
+    canton: Optional[str] = "Zarcero",
+    limite: int = 50,
+):
+    """
+    Auditoría de Fincas Invisibles (Candidatas a Saneamiento):
+    Cruza los inmuebles detectados en remates y bancos contra el WFS municipal
+    y aísla aquellos con título registral válido que NO existen en el mapa digital.
+    Para cada finca invisible, rastrea si existe un Vacío Catastral candidato
+    en su mismo distrito y vincula los vecinos colindantes.
+    """
+    repo_remates = SqliteRemateRepository()
+    repo_adj = SqliteAdjudicadosRepository()
+    provider = CatastroResolver.obtener_proveedor(canton)
+    gap_service = GapAnalysisService()
+    triage_client = LayaTriageClient(usar_modelo_local=False)
+
+    remates = repo_remates.listar(canton=canton, limite=limite)
+    adjudicados = repo_adj.listar(canton=canton, limite=limite)
+
+    candidatas = []
+    folios_vistos = set()
+
+    # Pre-cargar vacíos catastrales del cantón para vincularlos con las fincas invisibles
+    vacios_canton = gap_service.ejecutar_analisis_canton(
+        canton=canton or "Zarcero",
+        area_minima_m2=300.0,
+        area_maxima_m2=80000.0,
+        limite_predios_por_distrito=100,
+    )
+
+    def encontrar_vacio_candidato(distrito_buscado: Optional[str]) -> tuple[Optional[Dict[str, Any]], List[str]]:
+        if not distrito_buscado or not vacios_canton:
+            return None, []
+        d_norm = distrito_buscado.upper().strip()
+        for v in vacios_canton:
+            if v.distrito.upper() in d_norm or d_norm in v.distrito.upper():
+                return {
+                    "id_vacio": v.id_vacio,
+                    "distrito": v.distrito,
+                    "area_m2": v.area_estimada_m2,
+                    "perimetro_m": v.perimetro_m,
+                    "colindantes": ", ".join(v.fincas_colindantes[:5]),
+                    "colindantes_geometrias": v.geometrias_colindantes[:8],
+                    "geometry": v.geometria,
+                }, v.fincas_colindantes[:5]
+        # Si no hay match exacto de distrito pero hay vacíos detectados, ofrecer el primer candidato de zona
+        if vacios_canton:
+            v_primero = vacios_canton[0]
+            return {
+                "id_vacio": v_primero.id_vacio,
+                "distrito": v_primero.distrito,
+                "area_m2": v_primero.area_estimada_m2,
+                "perimetro_m": v_primero.perimetro_m,
+                "colindantes": ", ".join(v_primero.fincas_colindantes[:5]),
+                "colindantes_geometrias": v_primero.geometrias_colindantes[:8],
+                "geometry": v_primero.geometria,
+            }, v_primero.fincas_colindantes[:5]
+        return None, []
+
+    # 1. Auditar fincas adjudicadas por bancos
+    for b in adjudicados:
+        num_finca = b.folio_real.split("-")[1]
+        predio = provider.buscar_por_finca(num_finca)
+        if not predio and b.folio_real not in folios_vistos:
+            folios_vistos.add(b.folio_real)
+            triage = triage_client.clasificar_inmueble(
+                texto=f"Inmueble adjudicado por {b.institucion.value} en {b.canton}, folio {b.folio_real}.",
+                precio_actual=b.precio_actual,
+                porcentaje_descuento=b.porcentaje_descuento,
+                no_georreferenciada_wfs=True,
+            )
+            vacio_candidato, vecinos = encontrar_vacio_candidato(b.distrito)
+            candidatas.append({
+                "folio_real": b.folio_real,
+                "origen": f"Bancario ({b.institucion.value})",
+                "tipo_inmueble": b.tipo_inmueble.value,
+                "canton": b.canton,
+                "distrito": b.distrito or "No asignado en WFS",
+                "precio_referencia": f"{b.moneda} {b.precio_actual:,.2f}",
+                "descuento": b.porcentaje_descuento,
+                "estado_wfs": "Invisible en Catastro Digital (Requiere plano moderno)",
+                "tipo_oportunidad": triage.tipo_oportunidad.value,
+                "viabilidad_saneamiento": triage.viabilidad_saneamiento.value,
+                "detalles_saneamiento": triage.detalles_bloqueo,
+                "score_inversion": triage.score_inversion,
+                "url_publicacion": b.url_publicacion,
+                "vacio_asociado": vacio_candidato,
+                "vecinos_colindantes": vecinos,
+            })
+
+    # 2. Auditar remates judiciales/municipales
+    for r in remates:
+        num_finca = r.finca.numero_finca
+        predio = provider.buscar_por_finca(num_finca)
+        if not predio and r.finca.folio_real not in folios_vistos:
+            folios_vistos.add(r.finca.folio_real)
+            triage = triage_client.clasificar_inmueble(
+                texto=r.texto_original,
+                precio_actual=r.base.monto_base,
+                no_georreferenciada_wfs=True,
+            )
+            vacio_candidato, vecinos = encontrar_vacio_candidato(r.ubicacion.distrito)
+            candidatas.append({
+                "folio_real": r.finca.folio_real,
+                "origen": "Cobro Municipal" if r.es_morosidad_municipal else "Cobro Judicial",
+                "tipo_inmueble": "Inmueble Registral",
+                "canton": r.ubicacion.canton,
+                "distrito": r.ubicacion.distrito or "No asignado en WFS",
+                "precio_referencia": f"{r.base.moneda.value} {r.base.monto_base:,.2f}",
+                "descuento": 25.0 if r.urgencia == "TERCERA" else 0.0,
+                "estado_wfs": "Invisible en Catastro Digital (Requiere georreferenciación)",
+                "tipo_oportunidad": triage.tipo_oportunidad.value,
+                "viabilidad_saneamiento": triage.viabilidad_saneamiento.value,
+                "detalles_saneamiento": triage.detalles_bloqueo,
+                "score_inversion": triage.score_inversion,
+                "expediente": r.expediente,
+                "vacio_asociado": vacio_candidato,
+                "vecinos_colindantes": vecinos,
+            })
+
+    return candidatas
 
 
 @api_router.post("/adjudicados/sincronizar")
@@ -261,18 +387,11 @@ def diagnosticar_finca(
     folio: str,
     escenario: Optional[str] = None,
 ):
-    """
-    Diagnóstico jurídico patrimonial adaptado al contexto real de la finca:
-    Si la finca está registrada como remate o adjudicada, hereda su contexto real;
-    de lo contrario aplica análisis determinista según sus características.
-    """
     client = RegistroNacionalClient()
     repo_remates = SqliteRemateRepository()
     repo_adj = SqliteAdjudicadosRepository()
 
-    # 1. Verificar si existe en la base de remates
     remate_existente = repo_remates.obtener_por_folio_real(folio)
-    # 2. Verificar si es un bien adjudicado bancario
     bienes_adj = repo_adj.listar()
     adj_existente = next((b for b in bienes_adj if b.folio_real == folio), None)
 
@@ -295,16 +414,13 @@ def diagnosticar_finca(
         )
         gravamenes.append(Gravamen(tipo=GravamenTipo.USUFRUCTO, descripcion="Usufructo vitalicio"))
     elif adj_existente:
-        # Contexto real de bien adjudicado bancario
         titular = TitularFinca(
             nombre=f"{adj_existente.institucion.value} (Entidad Adjudicataria)",
             cedula="3-000-000000",
             tipo=TipoPersona.JURIDICA,
         )
         estado_soc = EstadoSociedad.NO_APLICA
-        # Un bien adjudicado ya limpió sus gravámenes judiciales anteriores al adjudicarse
     elif remate_existente:
-        # Contexto de ejecución judicial activa
         titular = TitularFinca(
             nombre=remate_existente.demandado or "DEUDOR REGISTRAL",
             cedula="1-0000-0000",
@@ -319,7 +435,6 @@ def diagnosticar_finca(
             )
         )
     else:
-        # Finca ordinaria sin proceso activo
         titular = TitularFinca(
             nombre="PROPIETARIO REGISTRAL",
             cedula="1-0000-0000",
@@ -333,7 +448,6 @@ def diagnosticar_finca(
         estado_sociedad=estado_soc,
     )
 
-    # Si es bien adjudicado bancario, precisar el dictamen
     if adj_existente:
         dictamen_personalizado = (
             f"Inmueble adjudicado en firme a favor de {adj_existente.institucion.value}. "
