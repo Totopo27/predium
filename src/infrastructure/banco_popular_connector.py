@@ -32,7 +32,7 @@ class BancoPopularAdjudicadosConnector(BienesAdjudicadosProvider):
                 contacto_nombre="Steven Guzman Muñoz",
                 contacto_email="sguzman@bp.fi.cr",
                 contacto_telefono="8450-3438",
-                url_publicacion="https://www.bancopopular.fi.cr/venta-de-propiedades/",
+                url_publicacion="https://www.bancopopular.fi.cr/wp-content/uploads/2026/03/BP_Shopper_Marzo_2026_SELLO.pdf",
             ),
             BienAdjudicado(
                 id_referencia="BP-EXP-2680-15",
@@ -50,7 +50,7 @@ class BancoPopularAdjudicadosConnector(BienesAdjudicadosProvider):
                 contacto_nombre="Steven Guzman Muñoz",
                 contacto_email="sguzman@bp.fi.cr",
                 contacto_telefono="8450-3438",
-                url_publicacion="https://www.bancopopular.fi.cr/venta-de-propiedades/",
+                url_publicacion="https://www.bancopopular.fi.cr/wp-content/uploads/2025/11/Catalogo-Venta-de-Bienes-Noviembre-2025.pdf",
             ),
             BienAdjudicado(
                 id_referencia="BP-EXP-4554-15",
@@ -68,7 +68,7 @@ class BancoPopularAdjudicadosConnector(BienesAdjudicadosProvider):
                 contacto_nombre="Steven Guzman Muñoz",
                 contacto_email="sguzman@bp.fi.cr",
                 contacto_telefono="8450-3438",
-                url_publicacion="https://www.bancopopular.fi.cr/venta-de-propiedades/",
+                url_publicacion="https://www.bancopopular.fi.cr/wp-content/uploads/2025/11/Catalogo-Venta-de-Bienes-Noviembre-2025.pdf",
             ),
             BienAdjudicado(
                 id_referencia="BP-EXP-2721-15",
@@ -86,7 +86,7 @@ class BancoPopularAdjudicadosConnector(BienesAdjudicadosProvider):
                 contacto_nombre="Steven Guzman Muñoz",
                 contacto_email="sguzman@bp.fi.cr",
                 contacto_telefono="8450-3438",
-                url_publicacion="https://www.bancopopular.fi.cr/venta-de-propiedades/",
+                url_publicacion="https://www.bancopopular.fi.cr/wp-content/uploads/2025/11/Catalogo-Venta-de-Bienes-Noviembre-2025.pdf",
             ),
         ]
 

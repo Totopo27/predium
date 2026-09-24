@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, List, Dict, Any
 from datetime import date, datetime, timedelta
 from src.infrastructure.sqlite_repository import SqliteRemateRepository
+from src.infrastructure.sqlite_adjudicados_repository import SqliteAdjudicadosRepository
 from src.infrastructure.catastro_factory import CatastroResolver
 from src.infrastructure.registro_nacional_client import RegistroNacionalClient
 from src.application.georreferenciar_service import GeorreferenciarService
@@ -61,7 +62,6 @@ def listar_bienes_adjudicados(
     institucion: Optional[str] = None,
     limite: int = 50,
 ):
-    from src.infrastructure.sqlite_adjudicados_repository import SqliteAdjudicadosRepository
     from src.domain.adjudicados_models import InstitucionFinanciera
     repo = SqliteAdjudicadosRepository()
     inst_enum = InstitucionFinanciera(institucion) if institucion and institucion in InstitucionFinanciera.__members__ else None
@@ -74,7 +74,6 @@ def sincronizar_bienes_adjudicados(
     canton: Optional[str] = Query("San Ramón", description="Cantón a filtrar"),
 ):
     from src.application.adjudicados_manager import AdjudicadosManager
-    from src.infrastructure.sqlite_adjudicados_repository import SqliteAdjudicadosRepository
     manager = AdjudicadosManager()
     repo = SqliteAdjudicadosRepository()
 
@@ -96,11 +95,6 @@ def escanear_boletin(
     dias: int = Query(5, description="Cantidad de días hábiles hacia atrás"),
     fecha: Optional[str] = Query(None, description="Fecha específica en formato YYYY-MM-DD"),
 ):
-    """
-    Ejecuta el escaneo del Boletín Judicial bajo demanda:
-    Descarga publicaciones oficiales, aplica triage de Sistema 1 con Laya,
-    deduplica en SQLite y georreferencia en Catastro WFS.
-    """
     orchestrator = OrchestratorService()
 
     if fecha:
@@ -123,7 +117,6 @@ def escanear_boletin(
             "mensaje": f"Escaneo finalizado para {fecha}. Nuevos remates ingresados: {log.nuevos_guardados_bd}.",
         }
 
-    # Escaneo de rango retrospectivo
     logs = orchestrator.ejecutar_catchup(dias_atras=dias, canton=canton)
     total_nuevos = sum(l.nuevos_guardados_bd for l in logs)
     total_alertas = sum(l.alertas_emitidas for l in logs)
@@ -266,16 +259,30 @@ def vacios_geojson(
 @api_router.get("/diagnostico")
 def diagnosticar_finca(
     folio: str,
-    escenario: Optional[str] = "sociedad_disuelta",
+    escenario: Optional[str] = None,
 ):
+    """
+    Diagnóstico jurídico patrimonial adaptado al contexto real de la finca:
+    Si la finca está registrada como remate o adjudicada, hereda su contexto real;
+    de lo contrario aplica análisis determinista según sus características.
+    """
     client = RegistroNacionalClient()
+    repo_remates = SqliteRemateRepository()
+    repo_adj = SqliteAdjudicadosRepository()
+
+    # 1. Verificar si existe en la base de remates
+    remate_existente = repo_remates.obtener_por_folio_real(folio)
+    # 2. Verificar si es un bien adjudicado bancario
+    bienes_adj = repo_adj.listar()
+    adj_existente = next((b for b in bienes_adj if b.folio_real == folio), None)
+
     titular = None
     estado_soc = EstadoSociedad.NO_APLICA
     gravamenes = []
 
     if escenario == "sociedad_disuelta":
         titular = TitularFinca(
-            nombre="Desarrollos del Norte S.A.",
+            nombre="Desarrollos Inmobiliarios S.A.",
             cedula="3-101-445566",
             tipo=TipoPersona.JURIDICA,
         )
@@ -286,17 +293,37 @@ def diagnosticar_finca(
             cedula="2-0111-0222",
             tipo=TipoPersona.FISICA,
         )
-        gravamenes.append(
-            Gravamen(tipo=GravamenTipo.USUFRUCTO, descripcion="Usufructo vitalicio")
-        )
-    elif escenario == "remate":
+        gravamenes.append(Gravamen(tipo=GravamenTipo.USUFRUCTO, descripcion="Usufructo vitalicio"))
+    elif adj_existente:
+        # Contexto real de bien adjudicado bancario
         titular = TitularFinca(
-            nombre="Inversiones Morosas S.A.",
-            cedula="3-101-998877",
+            nombre=f"{adj_existente.institucion.value} (Entidad Adjudicataria)",
+            cedula="3-000-000000",
             tipo=TipoPersona.JURIDICA,
         )
+        estado_soc = EstadoSociedad.NO_APLICA
+        # Un bien adjudicado ya limpió sus gravámenes judiciales anteriores al adjudicarse
+    elif remate_existente:
+        # Contexto de ejecución judicial activa
+        titular = TitularFinca(
+            nombre=remate_existente.demandado or "DEUDOR REGISTRAL",
+            cedula="1-0000-0000",
+            tipo=TipoPersona.FISICA,
+        )
         gravamenes.append(
-            Gravamen(tipo=GravamenTipo.EMBARGO, descripcion="Cobro Judicial Bancario", monto=35000000.0)
+            Gravamen(
+                tipo=GravamenTipo.EMBARGO,
+                descripcion=f"Ejecución en expediente {remate_existente.expediente or 'N/A'}",
+                acreedor_o_beneficiario=remate_existente.acreedor,
+                monto=remate_existente.base.monto_base,
+            )
+        )
+    else:
+        # Finca ordinaria sin proceso activo
+        titular = TitularFinca(
+            nombre="PROPIETARIO REGISTRAL",
+            cedula="1-0000-0000",
+            tipo=TipoPersona.FISICA,
         )
 
     diag = client.obtener_estudio_finca(
@@ -306,14 +333,26 @@ def diagnosticar_finca(
         estado_sociedad=estado_soc,
     )
 
+    # Si es bien adjudicado bancario, precisar el dictamen
+    if adj_existente:
+        dictamen_personalizado = (
+            f"Inmueble adjudicado en firme a favor de {adj_existente.institucion.value}. "
+            f"El título registral se encuentra libre de los gravámenes anteriores que motivaron el remate. "
+            f"Oportunidad de adquisición directa con financiamiento preferencial al precio de liquidación de {adj_existente.moneda} {adj_existente.precio_actual:,.2f}."
+        )
+        estrategia = "ADQUISICION_BIEN_ADJUDICADO"
+    else:
+        dictamen_personalizado = diag.diagnostico_resumen
+        estrategia = diag.estrategia_sugerida.value
+
     return {
         "folio_real": diag.folio_real,
-        "titular": diag.titulares[0].nombre,
-        "cedula": diag.titulares[0].cedula,
-        "tipo_titular": diag.titulares[0].tipo.value,
+        "titular": titular.nombre,
+        "cedula": titular.cedula,
+        "tipo_titular": titular.tipo.value,
         "alerta_sociedad_disuelta": diag.alerta_sociedad_disuelta,
         "alerta_usufructo_activo": diag.alerta_usufructo_activo,
         "alerta_embargos_judiciales": diag.alerta_embargos_judiciales,
-        "estrategia_sugerida": diag.estrategia_sugerida.value,
-        "dictamen": diag.diagnostico_resumen,
+        "estrategia_sugerida": estrategia,
+        "dictamen": dictamen_personalizado,
     }

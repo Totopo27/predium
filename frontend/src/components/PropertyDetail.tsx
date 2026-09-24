@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Scale, ShieldAlert, CheckCircle2, LocateFixed, HelpCircle, Landmark, ExternalLink, Percent } from 'lucide-react';
 import type { DiagnosticoPatrimonial } from '../types';
 
@@ -16,6 +16,11 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
   const [diagnostico, setDiagnostico] = useState<DiagnosticoPatrimonial | null>(null);
   const [cargandoDiag, setCargandoDiag] = useState(false);
 
+  // Reiniciar estado de diagnóstico cuando cambia la propiedad seleccionada
+  useEffect(() => {
+    setDiagnostico(null);
+  }, [featureData]);
+
   const props = featureData?.properties || {};
   const esRemate = props.tipo === 'REMATE';
   const esVacio = props.tipo === 'VACIO_CATASTRAL';
@@ -27,7 +32,7 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
     if (!folio) return;
     setCargandoDiag(true);
     try {
-      const res = await fetch(`/api/diagnostico?folio=${folio}&escenario=sociedad_disuelta`);
+      const res = await fetch(`/api/diagnostico?folio=${encodeURIComponent(folio)}`);
       const data = await res.json();
       setDiagnostico(data);
     } catch (err) {
@@ -133,6 +138,14 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
               </div>
             </div>
 
+            {/* Si ya tenemos el polígono catastral vinculado */}
+            {props.area_registro_m2 && (
+              <div className="grid grid-cols-2 gap-2 p-2.5 bg-slate-900/60 rounded-xl border border-slate-800 text-[11px]">
+                <div><span className="text-slate-500">Área Catastral:</span> {props.area_registro_m2} m²</div>
+                <div><span className="text-slate-500">Construcciones:</span> {props.construcciones || 0}</div>
+              </div>
+            )}
+
             {props.url_publicacion && (
               <a
                 href={props.url_publicacion}
@@ -140,7 +153,7 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
                 rel="noreferrer"
                 className="w-full bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold py-2 px-3 rounded-xl text-xs flex items-center justify-center space-x-1.5 transition"
               >
-                <span>Ver Publicación en {props.institucion}</span>
+                <span>Ver Publicación Oficial en {props.institucion}</span>
                 <ExternalLink className="w-3 h-3 text-slate-400" />
               </a>
             )}
@@ -181,7 +194,6 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
                 <span className="font-mono text-slate-300">{props.expediente}</span>
               </div>
             )}
-            {/* Dimensiones de Inteligencia Laya */}
             {props.tipo_oportunidad && (
               <div className="col-span-2 pt-2 border-t border-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between">

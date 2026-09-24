@@ -28,7 +28,7 @@ class GrupoMutualAdjudicadosConnector(BienesAdjudicadosProvider):
                 porcentaje_descuento=20.0,
                 moneda="CRC",
                 financiamiento_disponible=True,
-                url_publicacion="https://www.grupomutual.fi.cr/bienes-raices",
+                url_publicacion="https://www.grupomutual.fi.cr/bienes-raices/lotes/",
             ),
             BienAdjudicado(
                 id_referencia="GM-269634",
@@ -43,7 +43,7 @@ class GrupoMutualAdjudicadosConnector(BienesAdjudicadosProvider):
                 porcentaje_descuento=25.0,
                 moneda="CRC",
                 financiamiento_disponible=True,
-                url_publicacion="https://www.grupomutual.fi.cr/bienes-raices",
+                url_publicacion="https://www.grupomutual.fi.cr/bienes-raices/fincas/",
             ),
         ]
 

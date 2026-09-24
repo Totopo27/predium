@@ -203,7 +203,12 @@ export const App: React.FC = () => {
   };
 
   const handleSelectRemate = (r: Remate) => {
-    setSelectedFeature({
+    const numFinca = r.folio_real.split('-')[1];
+    const cantonRemate = r.canton || cantonActivo;
+
+    // Preservar la identidad de REMATE como fuente de verdad
+    const remateFeature = {
+      type: 'Feature',
       properties: {
         tipo: 'REMATE',
         folio_real: r.folio_real,
@@ -218,10 +223,9 @@ export const App: React.FC = () => {
         detalles_bloqueo: r.detalles_bloqueo,
         score_inversion: r.score_inversion,
       },
-    });
+    };
+    setSelectedFeature(remateFeature);
 
-    const numFinca = r.folio_real.split('-')[1];
-    const cantonRemate = r.canton || cantonActivo;
     if (numFinca) {
       fetch(`/api/catastro/buscar?finca=${encodeURIComponent(numFinca)}&canton=${encodeURIComponent(cantonRemate)}`)
         .then((res) => (res.ok ? res.json() : null))
@@ -229,7 +233,16 @@ export const App: React.FC = () => {
           if (data) {
             const reproyectado = reproyectarGeoJson(data);
             setPredioBuscadoGeoJson(reproyectado);
-            setSelectedFeature(reproyectado);
+            // Fusionar los datos físicos del predio sin sobreescribir el tipo REMATE
+            setSelectedFeature({
+              ...reproyectado,
+              properties: {
+                ...reproyectado.properties,
+                ...remateFeature.properties,
+                area_registro_m2: data.properties?.area_registro_m2,
+                construcciones: data.properties?.construcciones,
+              },
+            });
           }
         })
         .catch(() => {});
@@ -237,7 +250,12 @@ export const App: React.FC = () => {
   };
 
   const handleSelectAdjudicado = (b: BienAdjudicado) => {
-    setSelectedFeature({
+    const numFinca = b.folio_real.split('-')[1];
+    const cantonBien = b.canton || cantonActivo;
+
+    // Preservar la identidad de ADJUDICADO_BANCARIO como fuente de verdad
+    const adjudicadoFeature = {
+      type: 'Feature',
       properties: {
         tipo: 'ADJUDICADO_BANCARIO',
         folio_real: b.folio_real,
@@ -251,10 +269,9 @@ export const App: React.FC = () => {
         tipo_inmueble: b.tipo_inmueble,
         url_publicacion: b.url_publicacion,
       },
-    });
+    };
+    setSelectedFeature(adjudicadoFeature);
 
-    const numFinca = b.folio_real.split('-')[1];
-    const cantonBien = b.canton || cantonActivo;
     if (numFinca) {
       fetch(`/api/catastro/buscar?finca=${encodeURIComponent(numFinca)}&canton=${encodeURIComponent(cantonBien)}`)
         .then((res) => (res.ok ? res.json() : null))
@@ -262,7 +279,16 @@ export const App: React.FC = () => {
           if (data) {
             const reproyectado = reproyectarGeoJson(data);
             setPredioBuscadoGeoJson(reproyectado);
-            setSelectedFeature(reproyectado);
+            // Fusionar geometría y métricas físicas sin destruir la ficha bancaria
+            setSelectedFeature({
+              ...reproyectado,
+              properties: {
+                ...reproyectado.properties,
+                ...adjudicadoFeature.properties,
+                area_registro_m2: data.properties?.area_registro_m2,
+                construcciones: data.properties?.construcciones,
+              },
+            });
           }
         })
         .catch(() => {});

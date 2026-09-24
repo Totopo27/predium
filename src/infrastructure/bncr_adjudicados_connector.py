@@ -6,7 +6,7 @@ from src.domain.adjudicados_provider import BienesAdjudicadosProvider
 class BncrAdjudicadosConnector(BienesAdjudicadosProvider):
     """
     Conector para el portal de Bienes Adjudicados del Banco Nacional de Costa Rica (BNCR).
-    Portal: bncontacto.fi.cr/BNVentadeBienes / App BN Venta de Bienes
+    Portal: https://bncontacto.fi.cr/BNVentadeBienes / App BN Venta de Bienes
     """
 
     @property
@@ -27,6 +27,9 @@ class BncrAdjudicadosConnector(BienesAdjudicadosProvider):
                 porcentaje_descuento=40.0,
                 moneda="CRC",
                 financiamiento_disponible=True,
+                contacto_nombre="Edier Rosales R.",
+                contacto_email="erosalesr@bncr.fi.cr",
+                contacto_telefono="8890-9564",
                 url_publicacion="https://bncontacto.fi.cr/BNVentadeBienes",
             ),
             BienAdjudicado(
@@ -41,6 +44,9 @@ class BncrAdjudicadosConnector(BienesAdjudicadosProvider):
                 porcentaje_descuento=40.0,
                 moneda="CRC",
                 financiamiento_disponible=True,
+                contacto_nombre="Carlos Andrés Bonilla Graham",
+                contacto_email="cbonillag@bncr.fi.cr",
+                contacto_telefono="8563-3971",
                 url_publicacion="https://bncontacto.fi.cr/BNVentadeBienes",
             ),
             BienAdjudicado(
@@ -55,6 +61,9 @@ class BncrAdjudicadosConnector(BienesAdjudicadosProvider):
                 porcentaje_descuento=40.0,
                 moneda="CRC",
                 financiamiento_disponible=True,
+                contacto_nombre="Juan Carlos Guevara A.",
+                contacto_email="jcguevaraal@bncr.fi.cr",
+                contacto_telefono="8969-6031",
                 url_publicacion="https://bncontacto.fi.cr/BNVentadeBienes",
             ),
         ]
