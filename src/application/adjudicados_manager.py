@@ -3,6 +3,7 @@ from src.domain.adjudicados_models import BienAdjudicado, InstitucionFinanciera
 from src.domain.adjudicados_provider import BienesAdjudicadosProvider
 from src.infrastructure.bcr_adjudicados_connector import BcrAdjudicadosConnector
 from src.infrastructure.bncr_adjudicados_connector import BncrAdjudicadosConnector
+from src.infrastructure.banco_popular_connector import BancoPopularAdjudicadosConnector
 from src.infrastructure.bac_adjudicados_connector import BacAdjudicadosConnector
 from src.infrastructure.grupo_mutual_connector import GrupoMutualAdjudicadosConnector
 
@@ -17,6 +18,7 @@ class AdjudicadosManager:
         self.proveedores: List[BienesAdjudicadosProvider] = proveedores or [
             BcrAdjudicadosConnector(),
             BncrAdjudicadosConnector(),
+            BancoPopularAdjudicadosConnector(),
             BacAdjudicadosConnector(),
             GrupoMutualAdjudicadosConnector(),
         ]
