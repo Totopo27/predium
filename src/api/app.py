@@ -35,7 +35,6 @@ async def audit_requests_middleware(request: Request, call_next):
         latencia_ms = (time.perf_counter() - inicio) * 1000.0
         codigo = response.status_code
 
-        # Log limpio y claro de cada petición
         if codigo >= 400:
             logger.warning(f"HTTP {codigo} | {metodo} {url} | {latencia_ms:.1f}ms")
         else:
@@ -51,25 +50,17 @@ async def audit_requests_middleware(request: Request, call_next):
 # Rutas API
 app.include_router(api_router)
 
-# 1. Montar assets de React si existen
+# Montar bundle optimizado de React SPA (dist/assets)
 dist_assets = Path("frontend/dist/assets")
 if dist_assets.exists():
     app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="frontend_assets")
 
-# 2. Montar static tradicional de fallback
-static_dir = Path("static")
-static_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
 
 @app.get("/")
 def home():
+    """Sirve la Single Page Application de React o mensaje informativo de API."""
     frontend_dist_index = Path("frontend/dist/index.html")
     if frontend_dist_index.exists():
         return FileResponse(frontend_dist_index)
 
-    static_index = Path("static/index.html")
-    if static_index.exists():
-        return FileResponse(static_index)
-
-    return {"message": "Predium API activa. Visita /docs para la documentacion interactiva."}
+    return {"message": "Predium API activa. Visita /docs para la documentacion interactiva o corre 'cd frontend && npm run dev'."}
