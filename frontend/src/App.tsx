@@ -34,24 +34,33 @@ export const App: React.FC = () => {
 
   const cargarRemates = (canton: string = cantonActivo) => {
     fetch(`/api/remates?canton=${encodeURIComponent(canton)}`)
-      .then((res) => res.json())
-      .then((data) => setRemates(data))
-      .catch((err) => console.error('Error al cargar remates:', err));
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setRemates(Array.isArray(data) ? data : []))
+      .catch((err) => {
+        console.error('Error al cargar remates:', err);
+        setRemates([]);
+      });
 
     fetch(`/api/remates/geojson?canton=${encodeURIComponent(canton)}`)
-      .then((res) => res.json())
+      .then((res) => (res.ok ? res.json() : { type: 'FeatureCollection', features: [] }))
       .then((data) => {
         const reproyectado = reproyectarGeoJson(data);
         setRematesGeoJson(reproyectado);
       })
-      .catch((err) => console.error('Error al cargar capa de remates:', err));
+      .catch((err) => {
+        console.error('Error al cargar capa de remates:', err);
+        setRematesGeoJson({ type: 'FeatureCollection', features: [] });
+      });
   };
 
   const cargarAdjudicados = (canton: string = cantonActivo) => {
     fetch(`/api/adjudicados?canton=${encodeURIComponent(canton)}`)
-      .then((res) => res.json())
-      .then((data) => setAdjudicados(data))
-      .catch((err) => console.error('Error al cargar adjudicados:', err));
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setAdjudicados(Array.isArray(data) ? data : []))
+      .catch((err) => {
+        console.error('Error al cargar adjudicados:', err);
+        setAdjudicados([]);
+      });
   };
 
   useEffect(() => {

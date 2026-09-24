@@ -9,26 +9,27 @@ echo Iniciando Predium (Backend API + Frontend Web)
 echo ========================================================
 echo.
 
+:: Limpieza previa de puertos para evitar procesos zombies
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8000 ^| findstr LISTENING') do (
+    echo [CLEANUP] Liberando puerto 8000 (PID: %%a)...
+    taskkill /F /PID %%a >nul 2>&1
+)
+
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :3000 ^| findstr LISTENING') do (
+    echo [CLEANUP] Liberando puerto 3000 (PID: %%a)...
+    taskkill /F /PID %%a >nul 2>&1
+)
+
 if not exist ".venv\Scripts\python.exe" (
     echo [ERROR] No se encontro el entorno virtual en .venv.
-    echo Asegurate de crearlo e instalar las dependencias con:
-    echo   python -m venv .venv
-    echo   .\.venv\Scripts\pip install -r requirements.txt
     pause
     exit /b 1
 )
 
-if not exist "frontend\node_modules" (
-    echo [INFO] Instalando dependencias de frontend por primera vez...
-    cd frontend
-    call npm install
-    cd ..
-)
+echo [1/3] Levantando Backend API con Auto-Reload y Logs en vivo...
+start "Predium Backend API" cmd /k ".\.venv\Scripts\python.exe -m uvicorn src.api.app:app --host 127.0.0.1 --port 8000 --reload"
 
-echo [1/3] Levantando Backend API en http://127.0.0.1:8000 ...
-start "Predium Backend API" cmd /k ".\.venv\Scripts\python.exe main.py visor --no-browser"
-
-echo [2/3] Esperando inicio del servidor backend...
+echo [2/3] Esperando inicializacion del backend...
 timeout /t 3 /nobreak >nul
 
 echo [3/3] Levantando Frontend (React + Vite) en http://localhost:3000 ...
