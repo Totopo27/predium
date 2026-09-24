@@ -1,41 +1,50 @@
 import React, { useState } from 'react';
-import { Search, MapPin, AlertTriangle, Building, Flame, Layers, Sparkles, HelpCircle, Eye, RefreshCw, Calendar, Clock, ChevronDown } from 'lucide-react';
-import type { Remate, TerritorioInfo } from '../types';
+import { Search, MapPin, AlertTriangle, Building, Flame, Layers, Sparkles, HelpCircle, Eye, RefreshCw, Clock, ChevronDown, Landmark, Percent } from 'lucide-react';
+import type { Remate, BienAdjudicado, TerritorioInfo } from '../types';
 
 interface SidebarProps {
   remates: Remate[];
+  adjudicados: BienAdjudicado[];
   vaciosFeatures: any[];
   cantonActivo: string;
   territorios: TerritorioInfo[];
   onCambiarCanton: (canton: string) => void;
   onSelectRemate: (remate: Remate) => void;
+  onSelectAdjudicado: (bien: BienAdjudicado) => void;
   onSelectVacio: (vacioFeature: any) => void;
   onBuscarFinca: (fincaOPlano: string) => void;
   onEjecutarGapAnalysis: (distrito: string) => void;
   onEscanearBoletin: (dias: number, fecha?: string) => void;
+  onSincronizarBancos: () => void;
   cargandoRemates: boolean;
   cargandoVacios: boolean;
+  cargandoBancos: boolean;
   totalVacios: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   remates,
+  adjudicados,
   vaciosFeatures,
   cantonActivo,
   territorios,
   onCambiarCanton,
   onSelectRemate,
+  onSelectAdjudicado,
   onSelectVacio,
   onBuscarFinca,
   onEjecutarGapAnalysis,
   onEscanearBoletin,
+  onSincronizarBancos,
   cargandoRemates,
   cargandoVacios,
+  cargandoBancos,
   totalVacios,
 }) => {
   const [terminoBusqueda, setTerminoBusqueda] = useState('');
-  const [filtroRemates, setFiltroRemates] = useState('');
+  const [filtroGeneral, setFiltroGeneral] = useState('');
   const [distritoSeleccionado, setDistritoSeleccionado] = useState('TODOS');
+  const [tabOportunidades, setTabOportunidades] = useState<'remates' | 'bancos'>('remates');
 
   // Parámetros de Escaneo de Boletín
   const [modoEscaneo, setModoEscaneo] = useState<'dias' | 'fecha'>('dias');
@@ -59,13 +68,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const rematesFiltrados = remates.filter((r) => {
-    if (!filtroRemates.trim()) return true;
-    const q = filtroRemates.toLowerCase();
+    if (!filtroGeneral.trim()) return true;
+    const q = filtroGeneral.toLowerCase();
     return (
       r.folio_real.toLowerCase().includes(q) ||
       (r.acreedor && r.acreedor.toLowerCase().includes(q)) ||
       (r.distrito && r.distrito.toLowerCase().includes(q)) ||
       (r.plano && r.plano.toLowerCase().includes(q))
+    );
+  });
+
+  const adjudicadosFiltrados = adjudicados.filter((b) => {
+    if (!filtroGeneral.trim()) return true;
+    const q = filtroGeneral.toLowerCase();
+    return (
+      b.folio_real.toLowerCase().includes(q) ||
+      b.institucion.toLowerCase().includes(q) ||
+      b.id_referencia.toLowerCase().includes(q) ||
+      (b.distrito && b.distrito.toLowerCase().includes(q))
     );
   });
 
@@ -84,7 +104,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <h1 className="font-extrabold text-base tracking-tight bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
               Predium
             </h1>
-            {/* Selector de Cantón Activo */}
             <div className="flex items-center space-x-1 mt-0.5">
               <MapPin className="w-3 h-3 text-emerald-400 shrink-0" />
               <div className="relative inline-flex items-center">
@@ -120,7 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="text"
             value={terminoBusqueda}
             onChange={(e) => setTerminoBusqueda(e.target.value)}
-            placeholder="Ej: 313004 (Finca o Plano)"
+            placeholder="Ej: 538150 (Finca o Plano)"
             className="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500 text-slate-100 placeholder-slate-500 transition"
           />
           <button
@@ -168,15 +187,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        {/* BLOQUE ESCANEO BOLETÍN CON CONFIGURACIÓN */}
+        {/* BLOQUE ESCANEO BOLETÍN & BANCOS */}
         <div className="space-y-1.5 pt-1 border-t border-slate-800/60">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Escaneo de Remates ({cantonActivo})</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ingesta de Oportunidades</span>
             <button
               onClick={() => setMostrarConfigEscaneo(!mostrarConfigEscaneo)}
               className="text-[10px] text-cyan-400 hover:text-cyan-300 underline font-medium"
             >
-              {mostrarConfigEscaneo ? 'Ocultar opciones' : 'Ajustar periodo / fecha'}
+              {mostrarConfigEscaneo ? 'Ocultar' : 'Ajustar periodo'}
             </button>
           </div>
 
@@ -207,7 +226,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400 text-[11px] flex items-center space-x-1">
                     <Clock className="w-3 h-3 text-slate-500" />
-                    <span>Días hábiles atrás:</span>
+                    <span>Días atrás:</span>
                   </span>
                   <select
                     value={diasEscaneo}
@@ -218,45 +237,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <option value={15}>15 días</option>
                     <option value={30}>30 días (1 mes)</option>
                     <option value={60}>60 días (2 meses)</option>
-                    <option value={90}>90 días (3 meses)</option>
                   </select>
                 </div>
               ) : (
                 <div className="space-y-1">
-                  <span className="text-slate-400 text-[11px] flex items-center space-x-1">
-                    <Calendar className="w-3 h-3 text-slate-500" />
-                    <span>Fecha de publicación:</span>
-                  </span>
                   <input
                     type="date"
                     value={fechaHistorica}
                     onChange={(e) => setFechaHistorica(e.target.value)}
-                    placeholder="YYYY-MM-DD"
                     className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
                   />
-                  <p className="text-[10px] text-slate-500 italic">Ej: 2023-08-18 para remates de San Ramón.</p>
                 </div>
               )}
             </div>
           )}
 
-          <button
-            onClick={handleLanzarEscaneo}
-            disabled={cargandoRemates}
-            className="w-full bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-between transition group"
-          >
-            <div className="flex items-center space-x-2">
-              <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 transition ${cargandoRemates ? 'animate-spin' : 'group-hover:rotate-45'}`} />
-              <span>{cargandoRemates ? 'Escaneando Boletín...' : `Escanear Boletín (${cantonActivo})`}</span>
-            </div>
-            <span className="bg-cyan-500/20 text-cyan-300 text-[10px] px-2 py-0.5 rounded-full font-bold">
-              {rematesFiltrados.length} remates
-            </span>
-          </button>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              onClick={handleLanzarEscaneo}
+              disabled={cargandoRemates}
+              className="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 transition"
+            >
+              <RefreshCw className={`w-3 h-3 text-cyan-400 ${cargandoRemates ? 'animate-spin' : ''}`} />
+              <span className="truncate">Escanear Boletín</span>
+            </button>
+
+            <button
+              onClick={onSincronizarBancos}
+              disabled={cargandoBancos}
+              className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 transition"
+            >
+              <Landmark className={`w-3 h-3 text-purple-400 ${cargandoBancos ? 'animate-pulse' : ''}`} />
+              <span className="truncate">{cargandoBancos ? 'Consultando...' : 'Sincronizar Bancos'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Lista con Scroll: Vacíos + Remates */}
+      {/* Lista con Scroll: Vacíos + Pestañas de Remates / Bancos */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* SECCIÓN VACÍOS DETECTADOS */}
         {vaciosFeatures && vaciosFeatures.length > 0 && (
@@ -307,86 +325,140 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* SECCIÓN REMATES JUDICIALES Y MUNICIPALES */}
+        {/* PESTAÑAS: REMATES JUDICIALES VS BIENES ADJUDICADOS BANCARIOS */}
         <div className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
-              <Layers className="w-3 h-3 text-cyan-400" />
-              <span>Remates ({cantonActivo})</span>
-            </label>
-            <div className="flex items-center space-x-1.5">
-              <button
-                onClick={() => onEscanearBoletin(diasEscaneo)}
-                disabled={cargandoRemates}
-                title="Actualizar lista de remates"
-                className="text-slate-400 hover:text-cyan-400 p-1 rounded-lg hover:bg-slate-800 transition"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${cargandoRemates ? 'animate-spin' : ''}`} />
-              </button>
-              <span className="text-[10px] bg-slate-800/80 text-slate-400 px-2 py-0.5 rounded-full font-semibold">
-                {rematesFiltrados.length}
-              </span>
-            </div>
+          <div className="flex bg-slate-900 p-0.5 rounded-xl border border-slate-800 text-[11px] font-bold">
+            <button
+              onClick={() => setTabOportunidades('remates')}
+              className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center space-x-1.5 ${
+                tabOportunidades === 'remates' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Layers className="w-3 h-3" />
+              <span>Remates ({rematesFiltrados.length})</span>
+            </button>
+            <button
+              onClick={() => setTabOportunidades('bancos')}
+              className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center space-x-1.5 ${
+                tabOportunidades === 'bancos' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Landmark className="w-3 h-3" />
+              <span>Bancos ({adjudicadosFiltrados.length})</span>
+            </button>
           </div>
 
-          {/* Filtro rápido de remates */}
+          {/* Filtro general */}
           <div className="relative">
             <input
               type="text"
-              value={filtroRemates}
-              onChange={(e) => setFiltroRemates(e.target.value)}
-              placeholder="Filtrar por acreedor o folio..."
+              value={filtroGeneral}
+              onChange={(e) => setFiltroGeneral(e.target.value)}
+              placeholder="Filtrar por folio, banco o distrito..."
               className="w-full bg-slate-900/60 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-cyan-500 text-slate-200 placeholder-slate-500"
             />
           </div>
 
-          {rematesFiltrados.length === 0 ? (
-            <div className="text-center py-6 text-slate-500 space-y-2">
-              <AlertTriangle className="w-5 h-5 mx-auto text-slate-600" />
-              <p className="text-xs">No hay remates cargados para {cantonActivo}.<br/>Usá 'Escanear Boletín' arriba.</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {rematesFiltrados.map((r, i) => (
-                <div
-                  key={i}
-                  onClick={() => onSelectRemate(r)}
-                  className="p-3 bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-emerald-500/40 rounded-xl cursor-pointer transition shadow-sm group"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-xs text-slate-200 group-hover:text-emerald-400 transition flex items-center space-x-1">
-                      <MapPin className="w-3 h-3 text-emerald-500" />
-                      <span>{r.folio_real}</span>
-                    </span>
-                    <div className="flex space-x-1">
-                      {r.es_morosidad_municipal && (
-                        <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-bold border border-amber-500/20">
-                          Municipal
-                        </span>
-                      )}
-                      {r.urgencia === 'TERCERA' && (
-                        <span className="text-[9px] bg-rose-500/10 text-rose-400 px-1.5 py-0.5 rounded font-bold border border-rose-500/20 flex items-center space-x-0.5">
-                          <Flame className="w-2.5 h-2.5" />
-                          <span>3° Subasta</span>
-                        </span>
-                      )}
+          {/* CONTENIDO PESTAÑA REMATES */}
+          {tabOportunidades === 'remates' && (
+            rematesFiltrados.length === 0 ? (
+              <div className="text-center py-6 text-slate-500 space-y-2">
+                <AlertTriangle className="w-5 h-5 mx-auto text-slate-600" />
+                <p className="text-xs">No hay remates cargados para {cantonActivo}.<br/>Usá 'Escanear Boletín' arriba.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {rematesFiltrados.map((r, i) => (
+                  <div
+                    key={i}
+                    onClick={() => onSelectRemate(r)}
+                    className="p-3 bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-emerald-500/40 rounded-xl cursor-pointer transition shadow-sm group"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-xs text-slate-200 group-hover:text-emerald-400 transition flex items-center space-x-1">
+                        <MapPin className="w-3 h-3 text-emerald-500" />
+                        <span>{r.folio_real}</span>
+                      </span>
+                      <div className="flex space-x-1">
+                        {r.es_morosidad_municipal && (
+                          <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-bold border border-amber-500/20">
+                            Municipal
+                          </span>
+                        )}
+                        {r.urgencia === 'TERCERA' && (
+                          <span className="text-[9px] bg-rose-500/10 text-rose-400 px-1.5 py-0.5 rounded font-bold border border-rose-500/20 flex items-center space-x-0.5">
+                            <Flame className="w-2.5 h-2.5" />
+                            <span>3° Subasta</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-baseline justify-between mt-1.5">
-                    <span className="text-xs font-extrabold text-emerald-400">
-                      {r.moneda} {r.monto_base.toLocaleString()}
-                    </span>
-                    <span className="text-[10px] text-slate-400 truncate max-w-[130px]">
-                      {r.distrito || cantonActivo}
-                    </span>
+                    <div className="flex items-baseline justify-between mt-1.5">
+                      <span className="text-xs font-extrabold text-emerald-400">
+                        {r.moneda} {r.monto_base.toLocaleString()}
+                      </span>
+                      <span className="text-[10px] text-slate-400 truncate max-w-[130px]">
+                        {r.distrito || cantonActivo}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 truncate mt-1">
+                      {r.acreedor || 'Cobro Judicial'}
+                    </p>
                   </div>
-                  <p className="text-[10px] text-slate-500 truncate mt-1">
-                    {r.acreedor || 'Cobro Judicial'}
-                  </p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {/* CONTENIDO PESTAÑA BANCOS */}
+          {tabOportunidades === 'bancos' && (
+            adjudicadosFiltrados.length === 0 ? (
+              <div className="text-center py-6 text-slate-500 space-y-2">
+                <Landmark className="w-5 h-5 mx-auto text-slate-600" />
+                <p className="text-xs">No hay bienes bancarios para {cantonActivo}.<br/>Tocá 'Sincronizar Bancos' arriba.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {adjudicadosFiltrados.map((b, i) => (
+                  <div
+                    key={i}
+                    onClick={() => onSelectAdjudicado(b)}
+                    className="p-3 bg-purple-950/20 hover:bg-purple-950/30 border border-purple-500/30 hover:border-purple-400/60 rounded-xl cursor-pointer transition shadow-sm group"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-xs text-purple-300 group-hover:text-purple-200 transition flex items-center space-x-1">
+                        <MapPin className="w-3 h-3 text-purple-400" />
+                        <span>{b.folio_real}</span>
+                      </span>
+                      <div className="flex items-center space-x-1">
+                        <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-bold border border-purple-500/30">
+                          {b.institucion}
+                        </span>
+                        {b.porcentaje_descuento > 0 && (
+                          <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-bold border border-emerald-500/30 flex items-center space-x-0.5">
+                            <Percent className="w-2.5 h-2.5" />
+                            <span>{b.porcentaje_descuento}% OFF</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-baseline justify-between mt-1.5">
+                      <span className="text-xs font-extrabold text-emerald-400">
+                        {b.moneda} {b.precio_actual.toLocaleString()}
+                      </span>
+                      <span className="text-[10px] text-slate-400 truncate max-w-[130px]">
+                        {b.distrito || b.canton}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate mt-1">
+                      <span className="text-slate-500">Ref:</span> {b.id_referencia} · {b.tipo_inmueble}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )
           )}
         </div>
       </div>

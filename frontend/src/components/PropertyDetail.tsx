@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Scale, ShieldAlert, CheckCircle2, LocateFixed, HelpCircle } from 'lucide-react';
+import { X, Scale, ShieldAlert, CheckCircle2, LocateFixed, HelpCircle, Landmark, ExternalLink, Percent } from 'lucide-react';
 import type { DiagnosticoPatrimonial } from '../types';
 
 interface PropertyDetailProps {
@@ -19,6 +19,7 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
   const props = featureData?.properties || {};
   const esRemate = props.tipo === 'REMATE';
   const esVacio = props.tipo === 'VACIO_CATASTRAL';
+  const esAdjudicado = props.tipo === 'ADJUDICADO_BANCARIO';
   const noDigitalizado = props.tipo === 'PREDIO_NO_DIGITALIZADO';
   const folio = props.folio_real || (props.finca ? `2-${props.finca}-000` : null);
 
@@ -44,11 +45,13 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
           <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded border ${
             esVacio
               ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+              : esAdjudicado
+              ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
               : esRemate
               ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
               : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
           }`}>
-            {esVacio ? 'Vacío Catastral' : esRemate ? 'Edicto de Remate' : noDigitalizado ? 'Predio Registral' : 'Predio Catastrado'}
+            {esVacio ? 'Vacío Catastral' : esAdjudicado ? `Adjudicado (${props.institucion})` : esRemate ? 'Edicto de Remate' : noDigitalizado ? 'Predio Registral' : 'Predio Catastrado'}
           </span>
           <h2 className="text-base font-bold text-slate-100 mt-1">
             {esVacio ? props.id_vacio : folio || props.finca || 'Inmueble'}
@@ -85,13 +88,11 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
               </div>
             </div>
 
-            {/* Explicación técnica de la oportunidad */}
             <div className="p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 text-[11px] text-slate-400 flex items-start space-x-2">
               <HelpCircle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
               <span>Terreno no incorporado al mosaico catastral digital. Representa un inmueble sin titular aparente, posesión histórica o finca no georreferenciada susceptible de saneamiento.</span>
             </div>
 
-            {/* Botón explícito para ver en el mapa */}
             <button
               onClick={() => onCentrarEnMapa(featureData)}
               className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-md shadow-amber-600/20 transition"
@@ -99,6 +100,50 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({
               <LocateFixed className="w-3.5 h-3.5" />
               <span>Ver Vacío en el Mapa</span>
             </button>
+          </div>
+        ) : esAdjudicado ? (
+          <div className="space-y-2.5">
+            <div className="p-3 bg-purple-950/20 rounded-xl border border-purple-500/30 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-purple-300 font-bold flex items-center space-x-1.5">
+                  <Landmark className="w-3.5 h-3.5" />
+                  <span>{props.institucion}</span>
+                </span>
+                {props.descuento > 0 && (
+                  <span className="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-bold border border-emerald-500/30 flex items-center space-x-0.5">
+                    <Percent className="w-2.5 h-2.5" />
+                    <span>{props.descuento}% Descuento</span>
+                  </span>
+                )}
+              </div>
+
+              <div className="pt-1 border-t border-purple-500/20">
+                <span className="text-slate-400 block text-[10px]">Precio de Liquidación Actual</span>
+                <span className="font-extrabold text-base text-emerald-400">{props.precio}</span>
+                {props.precio_original && (
+                  <span className="text-slate-500 line-through text-[11px] block">{props.precio_original}</span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 pt-1 text-[11px]">
+                <div><span className="text-slate-500">Tipo:</span> {props.tipo_inmueble || 'Lote'}</div>
+                <div><span className="text-slate-500">Cantón:</span> {props.canton}</div>
+                <div><span className="text-slate-500">Ref:</span> {props.id_referencia}</div>
+                <div><span className="text-slate-500">Financiamiento:</span> 100%</div>
+              </div>
+            </div>
+
+            {props.url_publicacion && (
+              <a
+                href={props.url_publicacion}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold py-2 px-3 rounded-xl text-xs flex items-center justify-center space-x-1.5 transition"
+              >
+                <span>Ver Publicación en {props.institucion}</span>
+                <ExternalLink className="w-3 h-3 text-slate-400" />
+              </a>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2 p-3 bg-slate-900/60 rounded-xl border border-slate-800">

@@ -50,6 +50,41 @@ def listar_remates(
     ]
 
 
+@api_router.get("/adjudicados")
+def listar_bienes_adjudicados(
+    canton: Optional[str] = "San Ramón",
+    institucion: Optional[str] = None,
+    limite: int = 50,
+):
+    from src.infrastructure.sqlite_adjudicados_repository import SqliteAdjudicadosRepository
+    from src.domain.adjudicados_models import InstitucionFinanciera
+    repo = SqliteAdjudicadosRepository()
+    inst_enum = InstitucionFinanciera(institucion) if institucion and institucion in InstitucionFinanciera.__members__ else None
+    bienes = repo.listar(canton=canton, institucion=inst_enum, limite=limite)
+    return [b.model_dump() for b in bienes]
+
+
+@api_router.post("/adjudicados/sincronizar")
+def sincronizar_bienes_adjudicados(
+    canton: Optional[str] = Query("San Ramón", description="Cantón a filtrar"),
+):
+    from src.application.adjudicados_manager import AdjudicadosManager
+    from src.infrastructure.sqlite_adjudicados_repository import SqliteAdjudicadosRepository
+    manager = AdjudicadosManager()
+    repo = SqliteAdjudicadosRepository()
+
+    encontrados = manager.sincronizar_todos(canton=canton)
+    nuevos = repo.guardar_muchos(encontrados)
+
+    return {
+        "status": "ok",
+        "canton": canton,
+        "total_encontrados": len(encontrados),
+        "nuevos_guardados": nuevos,
+        "mensaje": f"Sincronizados {len(encontrados)} bienes adjudicados ({nuevos} nuevos en BD).",
+    }
+
+
 @api_router.post("/remates/escanear")
 def escanear_boletin(
     canton: str = Query("Zarcero", description="Cantón objetivo para el escaneo"),

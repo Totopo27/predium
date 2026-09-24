@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapView } from './components/Map';
 import { Sidebar } from './components/Sidebar';
 import { PropertyDetail } from './components/PropertyDetail';
-import type { Remate, TerritorioInfo } from './types';
+import type { Remate, BienAdjudicado, TerritorioInfo } from './types';
 import { reproyectarGeoJson } from './lib/geo';
 
 interface Notificacion {
@@ -14,6 +14,7 @@ export const App: React.FC = () => {
   const [territorios, setTerritorios] = useState<TerritorioInfo[]>([]);
   const [cantonActivo, setCantonActivo] = useState('Zarcero');
   const [remates, setRemates] = useState<Remate[]>([]);
+  const [adjudicados, setAdjudicados] = useState<BienAdjudicado[]>([]);
   const [rematesGeoJson, setRematesGeoJson] = useState<any>(null);
   const [vaciosGeoJson, setVaciosGeoJson] = useState<any>(null);
   const [predioBuscadoGeoJson, setPredioBuscadoGeoJson] = useState<any>(null);
@@ -21,6 +22,7 @@ export const App: React.FC = () => {
   const [tipoMapa, setTipoMapa] = useState<'satelite' | 'calles'>('satelite');
   const [cargandoVacios, setCargandoVacios] = useState(false);
   const [cargandoRemates, setCargandoRemates] = useState(false);
+  const [cargandoBancos, setCargandoBancos] = useState(false);
   const [notificacion, setNotificacion] = useState<Notificacion | null>(null);
 
   const mostrarNotificacion = (tipo: 'info' | 'success' | 'warning', mensaje: string) => {
@@ -45,7 +47,13 @@ export const App: React.FC = () => {
       .catch((err) => console.error('Error al cargar capa de remates:', err));
   };
 
-  // Cargar catálogo de territorios al montar
+  const cargarAdjudicados = (canton: string = cantonActivo) => {
+    fetch(`/api/adjudicados?canton=${encodeURIComponent(canton)}`)
+      .then((res) => res.json())
+      .then((data) => setAdjudicados(data))
+      .catch((err) => console.error('Error al cargar adjudicados:', err));
+  };
+
   useEffect(() => {
     fetch('/api/territorios')
       .then((res) => res.json())
@@ -57,15 +65,16 @@ export const App: React.FC = () => {
       .catch((err) => console.error('Error cargando territorios:', err));
 
     cargarRemates('Zarcero');
+    cargarAdjudicados('Zarcero');
   }, []);
 
   const handleCambiarCanton = (nuevoCanton: string) => {
     setCantonActivo(nuevoCanton);
     cargarRemates(nuevoCanton);
+    cargarAdjudicados(nuevoCanton);
     setVaciosGeoJson({ type: 'FeatureCollection', features: [] });
     setSelectedFeature(null);
 
-    // Volar al nuevo cantón según coordenadas del territorio
     const terr = territorios.find((t) => t.canton === nuevoCanton);
     const centro = terr ? terr.centro_lng_lat : [-84.394, 10.188];
     setPredioBuscadoGeoJson({
@@ -108,6 +117,26 @@ export const App: React.FC = () => {
       cargarRemates(cantonActivo);
     } finally {
       setCargandoRemates(false);
+    }
+  };
+
+  const handleSincronizarBancos = async () => {
+    setCargandoBancos(true);
+    try {
+      const res = await fetch(`/api/adjudicados/sincronizar?canton=${encodeURIComponent(cantonActivo)}`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      cargarAdjudicados(cantonActivo);
+      mostrarNotificacion(
+        'success',
+        `Bancos sincronizados: ${data.total_encontrados} propiedades encontradas (${data.nuevos_guardados} nuevas).`
+      );
+    } catch (err) {
+      console.error('Error sincronizando bancos:', err);
+      mostrarNotificacion('warning', 'Error al sincronizar catálogos bancarios.');
+    } finally {
+      setCargandoBancos(false);
     }
   };
 
@@ -194,6 +223,39 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleSelectAdjudicado = (b: BienAdjudicado) => {
+    setSelectedFeature({
+      properties: {
+        tipo: 'ADJUDICADO_BANCARIO',
+        folio_real: b.folio_real,
+        institucion: b.institucion,
+        id_referencia: b.id_referencia,
+        precio: `${b.moneda} ${b.precio_actual.toLocaleString()}`,
+        precio_original: b.precio_original ? `${b.moneda} ${b.precio_original.toLocaleString()}` : null,
+        descuento: b.porcentaje_descuento,
+        canton: b.canton,
+        distrito: b.distrito,
+        tipo_inmueble: b.tipo_inmueble,
+        url_publicacion: b.url_publicacion,
+      },
+    });
+
+    const numFinca = b.folio_real.split('-')[1];
+    const cantonBien = b.canton || cantonActivo;
+    if (numFinca) {
+      fetch(`/api/catastro/buscar?finca=${encodeURIComponent(numFinca)}&canton=${encodeURIComponent(cantonBien)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) {
+            const reproyectado = reproyectarGeoJson(data);
+            setPredioBuscadoGeoJson(reproyectado);
+            setSelectedFeature(reproyectado);
+          }
+        })
+        .catch(() => {});
+    }
+  };
+
   const handleSelectVacio = (vacioFeature: any) => {
     setSelectedFeature(vacioFeature);
     setPredioBuscadoGeoJson(vacioFeature);
@@ -225,17 +287,21 @@ export const App: React.FC = () => {
       {/* Barra lateral */}
       <Sidebar
         remates={remates}
+        adjudicados={adjudicados}
         vaciosFeatures={vaciosGeoJson?.features || []}
         cantonActivo={cantonActivo}
         territorios={territorios}
         onCambiarCanton={handleCambiarCanton}
         onSelectRemate={handleSelectRemate}
+        onSelectAdjudicado={handleSelectAdjudicado}
         onSelectVacio={handleSelectVacio}
         onBuscarFinca={handleBuscarFinca}
         onEjecutarGapAnalysis={handleEjecutarGapAnalysis}
         onEscanearBoletin={handleEscanearBoletin}
+        onSincronizarBancos={handleSincronizarBancos}
         cargandoRemates={cargandoRemates}
         cargandoVacios={cargandoVacios}
+        cargandoBancos={cargandoBancos}
         totalVacios={vaciosGeoJson?.features?.length || 0}
       />
 

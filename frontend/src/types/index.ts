@@ -16,6 +16,23 @@ export interface Remate {
   urgencia?: 'PRIMERA' | 'SEGUNDA' | 'TERCERA';
 }
 
+export interface BienAdjudicado {
+  id_referencia: string;
+  institucion: string;
+  folio_real: string;
+  plano_catastrado?: string;
+  tipo_inmueble: string;
+  provincia: string;
+  canton: string;
+  distrito?: string;
+  precio_actual: number;
+  precio_original?: number;
+  porcentaje_descuento: number;
+  moneda: string;
+  financiamiento_disponible: boolean;
+  url_publicacion?: string;
+}
+
 export interface PredioPropiedades {
   finca: string;
   plano?: string;
