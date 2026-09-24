@@ -125,13 +125,13 @@ export const App: React.FC = () => {
       if (data.nuevos_guardados > 0) {
         mostrarNotificacion(
           'success',
-          `¡Se ingresaron ${data.nuevos_guardados} nuevos remates para ${cantonActivo} a la base de datos!`
+          `Boletín analizado: ¡Se ingresaron ${data.nuevos_guardados} nuevos remates para ${cantonActivo} a la base de datos!`
         );
       } else {
         const detalle = fecha ? `Fecha ${fecha}` : `${data.dias_escaneados || dias} días analizados`;
         mostrarNotificacion(
           'info',
-          `Boletín analizado (${detalle}): No hay nuevos remates para ${cantonActivo}.`
+          `Boletín analizado (${detalle}): No se publicaron nuevos remates para ${cantonActivo} en este periodo. Tienes ${remates.length} remates en tu inventario guardado.`
         );
       }
     } catch (err) {
@@ -152,10 +152,17 @@ export const App: React.FC = () => {
       const data = await res.json();
       cargarAdjudicados(cantonActivo);
       cargarInvisibles(cantonActivo);
-      mostrarNotificacion(
-        'success',
-        `Bancos sincronizados: ${data.total_encontrados} propiedades encontradas (${data.nuevos_guardados} nuevas).`
-      );
+      if (data.nuevos_guardados > 0) {
+        mostrarNotificacion(
+          'success',
+          `Bancos sincronizados: ¡Se agregaron ${data.nuevos_guardados} nuevas propiedades a tu inventario de ${cantonActivo}!`
+        );
+      } else {
+        mostrarNotificacion(
+          'info',
+          `Bancos sincronizados: ${data.total_encontrados} propiedades activas en ${cantonActivo} (0 nuevas, base de datos al día).`
+        );
+      }
     } catch (err) {
       console.error('Error sincronizando bancos:', err);
       mostrarNotificacion('warning', 'Error al sincronizar catálogos bancarios.');
@@ -168,22 +175,25 @@ export const App: React.FC = () => {
     try {
       const res = await fetch(`/api/catastro/buscar?finca=${encodeURIComponent(fincaOPlano)}&canton=${encodeURIComponent(cantonActivo)}`);
       if (!res.ok) {
-        setSelectedFeature({
-          properties: {
-            tipo: 'PREDIO_NO_DIGITALIZADO',
-            finca: fincaOPlano,
-            distrito: `No georreferenciado en WFS (${cantonActivo})`,
-            detalles: 'Este inmueble no tiene plano digitalizado en el catastro municipal actual o es una finca antigua.',
-          },
-        });
-        mostrarNotificacion('info', `Finca ${fincaOPlano}: No localizada en catastro de ${cantonActivo}.`);
+        mostrarNotificacion('warning', `Error consultando catastro para finca ${fincaOPlano}.`);
         return;
       }
       const data = await res.json();
       const reproyectado = reproyectarGeoJson(data);
-      setPredioBuscadoGeoJson(reproyectado);
+      if (reproyectado && reproyectado.geometry) {
+        setPredioBuscadoGeoJson(reproyectado);
+      }
       setSelectedFeature(reproyectado);
-      mostrarNotificacion('success', `Predio ${fincaOPlano} localizado en catastro de ${cantonActivo}.`);
+
+      const esInvisible = data.properties?.tipo === 'PREDIO_NO_DIGITALIZADO';
+      if (esInvisible) {
+        mostrarNotificacion(
+          'info',
+          `Finca ${fincaOPlano}: No georreferenciada en WFS (Candidata a Saneamiento vinculada a Vacío).`
+        );
+      } else {
+        mostrarNotificacion('success', `Predio ${fincaOPlano} localizado en catastro de ${cantonActivo}.`);
+      }
     } catch (err) {
       console.error('Error al consultar catastro:', err);
     }

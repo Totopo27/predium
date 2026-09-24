@@ -8,12 +8,26 @@ from src.domain.catastro_provider import CatastroProvider
 from src.application.gap_detector import GapDetector
 from src.infrastructure.catastro_factory import CatastroResolver
 
+MAPEO_POBLADO_A_DISTRITO: Dict[str, str] = {
+    "ANATERI": "GUADALUPE",
+    "PUEBLO_NUEVO": "PALMIRA",
+    "LA_LEGUA": "BRISAS",
+    "SANTA_ELENA": "ZAPOTE",
+    "BAJOS_DEL_TORO": "PALMIRA",
+    "EL_LABRADOR": "LAGUNA",
+    "MAGALLANES": "SAN JUAN",
+    "LA_CATARATA": "SAN RAMON",
+    "ALTO_VILCHEZ": "PIEDADES NORTE",
+    "BAJO_RODRIGUEZ": "PENAS BLANCAS",
+    "EL_CHARCO": "SAN ISIDRO",
+}
+
 
 class GapAnalysisService:
     """
     Servicio de orquestación para ejecutar el análisis de vacíos territoriales
     usando los servicios WFS oficiales y exportar los resultados a GeoJSON.
-    Soporta múltiples cantones (Zarcero, San Ramón, etc.) mediante CatastroResolver.
+    Soporta múltiples cantones (Zarcero, San Ramón), distritos y caseríos/sectores específicos.
     """
 
     DISTRITOS_ZARCERO = ["GUADALUPE", "ZAPOTE", "PALMIRA", "ZARCERO", "LAGUNA", "TAPESCO", "BRISAS"]
@@ -45,12 +59,15 @@ class GapAnalysisService:
         limite_predios: int = 150,
     ) -> Optional[ResultadoGapAnalysis]:
         """
-        Ejecuta el análisis de vacíos topológicos para un distrito de cualquier cantón.
-        Utiliza el envolvente (Convex Hull) de los predios si no hay capa distrital separada.
-        Descarta polígonos que superen el área máxima de lote para evitar el perímetro rural exterior.
+        Ejecuta el análisis de vacíos topológicos para un distrito o caserío/sector específico.
+        Detecta vacíos encerrados entre las fincas referenciadas del sector.
         """
+        d_upper = distrito.upper().strip()
+        # Si es un caserío/poblado, consultar el distrito padre oficial
+        distrito_consulta = MAPEO_POBLADO_A_DISTRITO.get(d_upper, d_upper)
+
         provider = self._resolver_proveedor(canton)
-        predios_modelos = provider.obtener_predios_distrito(distrito, limite=limite_predios)
+        predios_modelos = provider.obtener_predios_distrito(distrito_consulta, limite=limite_predios)
         if not predios_modelos:
             return None
 
@@ -65,7 +82,7 @@ class GapAnalysisService:
         envolvente_zona = unary_union(geoms).convex_hull
 
         resultado = self.detector.analizar_zona(
-            distrito_nombre=distrito,
+            distrito_nombre=d_upper,
             geometria_distrito=envolvente_zona,
             predios_catastrados=predios_input,
             area_minima_m2=area_minima_m2,

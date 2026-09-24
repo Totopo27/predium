@@ -4,6 +4,8 @@ from src.domain.adjudicados_models import BienAdjudicado, InstitucionFinanciera,
 from src.domain.adjudicados_provider import BienesAdjudicadosProvider
 from src.infrastructure.tinyfish_client import TinyFishClient
 
+PROVINCIAS = ["SAN JOSE", "ALAJUELA", "CARTAGO", "HEREDIA", "GUANACASTE", "PUNTARENAS", "LIMON", "LIMÓN"]
+
 
 class BcrAdjudicadosConnector(BienesAdjudicadosProvider):
     """
@@ -20,51 +22,112 @@ class BcrAdjudicadosConnector(BienesAdjudicadosProvider):
 
     def _parsear_texto_markdown(self, texto: str, tipo_defecto: TipoInmuebleBancario = TipoInmuebleBancario.LOTE_O_TERRENO) -> List[BienAdjudicado]:
         bienes: List[BienAdjudicado] = []
-        texto_limpio = texto.replace("\n", " ").replace("\r", " ")
+        lineas = [l.strip() for l in texto.splitlines() if l.strip()]
 
-        folio_matches = list(re.finditer(r"Folio\s*real\s*[:\s]*([1-7]-?\d{5,7}-?\d{3})", texto_limpio, re.IGNORECASE))
-        for fm in folio_matches:
-            folio = fm.group(1).strip()
-            inicio = max(0, fm.start() - 350)
-            fin = min(len(texto_limpio), fm.end() + 200)
-            bloque = texto_limpio[inicio:fin]
+        for i, l in enumerate(lineas):
+            if "folio real" in l.lower():
+                # El folio real suele estar en esta línea o en la siguiente
+                match_folio = re.search(r"([1-7]-?\d{5,7}-?\d{3})", l)
+                if not match_folio and i + 1 < len(lineas):
+                    match_folio = re.search(r"([1-7]-?\d{5,7}-?\d{3})", lineas[i + 1])
+                if not match_folio:
+                    continue
+                folio = match_folio.group(1).strip()
 
-            match_id = re.search(r"(BCR-BA-?\d+)", bloque, re.IGNORECASE)
-            id_ref = match_id.group(1).upper() if match_id else f"BCR-{folio}"
+                # Retroceder hasta 15 líneas para capturar título, precio, provincia, cantón y descuento
+                bloque_lineas = lineas[max(0, i - 12):i]
+                bloque_txt = " ".join(bloque_lineas)
 
-            match_precio = re.search(r"Precio\s*[:\s]*[¢₡$]?\s*([\d\.,]+)", bloque, re.IGNORECASE)
-            precio = 0.0
-            if match_precio:
-                raw_p = match_precio.group(1).replace(".", "").replace(",", ".")
-                try:
-                    precio = float(raw_p)
-                except ValueError:
-                    precio = 0.0
+                # ID referencia (BCR-BA-...)
+                match_id = re.search(r"(BCR-BA-?\d+)", bloque_txt, re.IGNORECASE)
+                id_ref = match_id.group(1).upper() if match_id else f"BCR-{folio}"
 
-            match_desc = re.search(r"(\d+)%\s*descuento", bloque, re.IGNORECASE)
-            descuento = float(match_desc.group(1)) if match_desc else 0.0
+                # Precio
+                match_p = re.search(r"[¢₡$]\s*([\d\.,]+)", bloque_txt)
+                precio = 0.0
+                if match_p:
+                    try:
+                        precio = float(match_p.group(1).replace(".", "").replace(",", "."))
+                    except ValueError:
+                        precio = 0.0
 
-            canton = "San Ramón" if "ramón" in bloque.lower() or "ramon" in bloque.lower() else "Zarcero"
+                # Descuento
+                match_d = re.search(r"(\d+)%\s*descuento", bloque_txt, re.IGNORECASE)
+                descuento = float(match_d.group(1)) if match_d else 0.0
 
-            bienes.append(
-                BienAdjudicado(
-                    id_referencia=id_ref,
-                    institucion=self.institucion,
-                    folio_real=folio,
-                    tipo_inmueble=tipo_defecto,
-                    provincia="Alajuela",
-                    canton=canton,
-                    precio_actual=precio or 9182400.0,
-                    porcentaje_descuento=descuento or 40.0,
-                    moneda="CRC",
-                    url_publicacion="https://ventadebienes.bancobcr.com",
+                # Detección precisa de Provincia y Cantón en las líneas inmediatas anteriores
+                provincia = "Alajuela"
+                canton = "Desconocido"
+
+                # Buscar nombres en mayúsculas de provincia y cantón
+                for idx_rev in range(len(bloque_lineas) - 1, -1, -1):
+                    linea_c = bloque_lineas[idx_rev].upper()
+                    for prov in PROVINCIAS:
+                        if prov in linea_c:
+                            provincia = prov.title()
+                            # El cantón suele estar en la línea siguiente a la provincia
+                            if idx_rev + 1 < len(bloque_lineas):
+                                posible_canton = bloque_lineas[idx_rev + 1].strip()
+                                if not any(k in posible_canton.lower() for k in ["folio", "precio", "compartir", "descuento", "bcr"]):
+                                    canton = posible_canton.title()
+                            break
+                    if canton != "Desconocido":
+                        break
+
+                # Si aún es desconocido, buscar palabras clave en el bloque
+                if canton == "Desconocido":
+                    if "san ramón" in bloque_txt.lower() or "san ramon" in bloque_txt.lower():
+                        canton = "San Ramón"
+                    elif "zarcero" in bloque_txt.lower() or "alfaro ruiz" in bloque_txt.lower():
+                        canton = "Zarcero"
+                    elif "alajuelita" in bloque_txt.lower():
+                        canton = "Alajuelita"
+                        provincia = "San José"
+                    elif "bagaces" in bloque_txt.lower():
+                        canton = "Bagaces"
+                        provincia = "Guanacaste"
+                    elif "cañas" in bloque_txt.lower() or "canas" in bloque_txt.lower():
+                        canton = "Cañas"
+                        provincia = "Guanacaste"
+                    elif "paraíso" in bloque_txt.lower() or "paraiso" in bloque_txt.lower():
+                        canton = "Paraíso"
+                        provincia = "Cartago"
+                    elif "flores" in bloque_txt.lower():
+                        canton = "Flores"
+                        provincia = "Heredia"
+                    elif "limón" in bloque_txt.lower() or "limon" in bloque_txt.lower():
+                        canton = "Limón"
+                        provincia = "Limón"
+                    elif "puntarenas" in bloque_txt.lower():
+                        canton = "Puntarenas"
+                        provincia = "Puntarenas"
+
+                # Tipo de inmueble
+                tipo = tipo_defecto
+                if "casa" in bloque_txt.lower():
+                    tipo = TipoInmuebleBancario.CASA
+                elif "finca" in bloque_txt.lower():
+                    tipo = TipoInmuebleBancario.FINCA
+
+                bienes.append(
+                    BienAdjudicado(
+                        id_referencia=id_ref,
+                        institucion=self.institucion,
+                        folio_real=folio,
+                        tipo_inmueble=tipo,
+                        provincia=provincia,
+                        canton=canton,
+                        precio_actual=precio or 9182400.0,
+                        porcentaje_descuento=descuento,
+                        moneda="CRC",
+                        url_publicacion="https://ventadebienes.bancobcr.com",
+                    )
                 )
-            )
 
         return bienes
 
     def obtener_catalogo(self, canton: Optional[str] = None) -> List[BienAdjudicado]:
-        # 1. Intentar scraping en vivo mediante el navegador Stealth de TinyFish
+        # 1. Scraping en vivo mediante el navegador Stealth de TinyFish
         if self.tinyfish.esta_configurado:
             try:
                 url_bcr = "https://ventadebienes.bancobcr.com/wps/portal/bcrb/bcrbienes/bienes/terrenos?tipo_propiedad=3"

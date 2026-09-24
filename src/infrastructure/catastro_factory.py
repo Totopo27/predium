@@ -1,6 +1,6 @@
 from typing import Optional, List, Dict
 from src.domain.catastro_provider import CatastroProvider
-from src.domain.territorio_models import TerritorioInfo, DistritoInfo
+from src.domain.territorio_models import TerritorioInfo, DistritoInfo, PobladoInfo
 from src.infrastructure.catastro_zarcero_client import CatastroZarceroClient
 from src.infrastructure.catastro_san_ramon_client import CatastroSanRamonClient
 from src.infrastructure.catastro_fallback_client import FallbackCatastroProvider
@@ -23,6 +23,14 @@ TERRITORIOS_SOPORTADOS: Dict[str, TerritorioInfo] = {
             DistritoInfo(id="LAGUNA", label="Laguna"),
             DistritoInfo(id="TAPESCO", label="Tapesco"),
             DistritoInfo(id="BRISAS", label="Brisas"),
+        ],
+        poblados=[
+            PobladoInfo(id="ANATERI", label="Caserío Anateri", distrito_padre="GUADALUPE"),
+            PobladoInfo(id="PUEBLO_NUEVO", label="Sector Pueblo Nuevo", distrito_padre="PALMIRA"),
+            PobladoInfo(id="LA_LEGUA", label="Caserío La Legua", distrito_padre="BRISAS"),
+            PobladoInfo(id="SANTA_ELENA", label="Sector Santa Elena", distrito_padre="ZAPOTE"),
+            PobladoInfo(id="BAJOS_DEL_TORO", label="Poblado Bajos del Toro", distrito_padre="PALMIRA"),
+            PobladoInfo(id="EL_LABRADOR", label="Sector El Labrador", distrito_padre="LAGUNA"),
         ],
     ),
     "San Ramón": TerritorioInfo(
@@ -48,6 +56,13 @@ TERRITORIOS_SOPORTADOS: Dict[str, TerritorioInfo] = {
             DistritoInfo(id="ZAPOTAL", label="Zapotal"),
             DistritoInfo(id="PENAS BLANCAS", label="Peñas Blancas"),
             DistritoInfo(id="SAN LORENZO", label="San Lorenzo"),
+        ],
+        poblados=[
+            PobladoInfo(id="MAGALLANES", label="Caserío Magallanes", distrito_padre="SAN JUAN"),
+            PobladoInfo(id="LA_CATARATA", label="Sector La Catarata", distrito_padre="SAN RAMON"),
+            PobladoInfo(id="ALTO_VILCHEZ", label="Sector Alto Vílchez", distrito_padre="PIEDADES NORTE"),
+            PobladoInfo(id="BAJO_RODRIGUEZ", label="Caserío Bajo Rodríguez", distrito_padre="PENAS BLANCAS"),
+            PobladoInfo(id="EL_CHARCO", label="Sector El Charco", distrito_padre="SAN ISIDRO"),
         ],
     ),
 }

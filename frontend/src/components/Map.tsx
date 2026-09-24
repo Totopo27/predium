@@ -26,12 +26,13 @@ export const MapView: React.FC<MapProps> = ({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
 
-  const centrarEnCoords = (coordsGeoJson: any, maxZoomNivel: number = 17) => {
+  const centrarEnCoords = (coordsGeoJson: any, maxZoomNivel: number = 15.2) => {
     const map = mapRef.current;
     if (!map || !coordsGeoJson) return;
 
     const bounds = new maplibregl.LngLatBounds();
     let puntosValidos = 0;
+    let ultimoPuntoValido: [number, number] = [-84.394, 10.188];
 
     const recorrer = (c: any) => {
       if (typeof c[0] === 'number') {
@@ -39,6 +40,7 @@ export const MapView: React.FC<MapProps> = ({
         const lat = c[1];
         if (lon >= -87.0 && lon <= -82.0 && lat >= 7.5 && lat <= 12.0) {
           bounds.extend([lon, lat]);
+          ultimoPuntoValido = [lon, lat];
           puntosValidos++;
         }
       } else if (Array.isArray(c)) {
@@ -48,9 +50,24 @@ export const MapView: React.FC<MapProps> = ({
 
     recorrer(coordsGeoJson);
 
-    if (puntosValidos > 0 && !bounds.isEmpty()) {
-      map.fitBounds(bounds, { padding: 80, maxZoom: maxZoomNivel, duration: 1200 });
+    if (puntosValidos === 0 || bounds.isEmpty()) return;
+
+    // Si es un solo punto o las coordenadas tienen área cero (ej: centro de cantón)
+    if (puntosValidos === 1 || bounds.getWest() === bounds.getEast()) {
+      map.flyTo({
+        center: ultimoPuntoValido,
+        zoom: Math.min(14.0, maxZoomNivel),
+        duration: 1000,
+      });
+      return;
     }
+
+    // Para polígonos con área
+    map.fitBounds(bounds, {
+      padding: { top: 60, bottom: 60, left: 60, right: 390 },
+      maxZoom: maxZoomNivel,
+      duration: 1200,
+    });
   };
 
   const cambiarCapaBase = (tipo: 'satelite' | 'calles') => {
@@ -80,6 +97,7 @@ export const MapView: React.FC<MapProps> = ({
             'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
           ],
           tileSize: 256,
+          maxzoom: 17,
           attribution: '&copy; Esri & contributors',
         },
         'osm-tiles': {
@@ -115,7 +133,8 @@ export const MapView: React.FC<MapProps> = ({
       container: mapContainer.current,
       style: mapStyle,
       center: [-84.394, 10.188],
-      zoom: 14,
+      zoom: 13.5,
+      maxZoom: 17.2,
       pitch: 35,
       bearing: 0,
       attributionControl: false,
@@ -333,7 +352,6 @@ export const MapView: React.FC<MapProps> = ({
             features: [selectedFeature],
           });
 
-          // Si el vacío trae sus fincas vecinas colindantes, cargarlas en azul
           const props = selectedFeature.properties || {};
           const colindantesGeoms = props.colindantes_geometrias;
 
@@ -360,10 +378,9 @@ export const MapView: React.FC<MapProps> = ({
             }
           }
 
-          // Centrar con zoom ajustado
           const coords = selectedFeature.geometry.coordinates;
           if (coords) {
-            centrarEnCoords(coords, 16);
+            centrarEnCoords(coords, 15.2);
           }
 
           if (popupRef.current) popupRef.current.remove();
@@ -388,7 +405,7 @@ export const MapView: React.FC<MapProps> = ({
         src.setData(predioBuscadoGeoJson);
         const coords = predioBuscadoGeoJson.geometry?.coordinates;
         if (coords) {
-          centrarEnCoords(coords, 18);
+          centrarEnCoords(coords, 15.2);
         }
       }
     } catch (e) {}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, MapPin, AlertTriangle, Building, Flame, Layers, Sparkles, HelpCircle, Eye, RefreshCw, Clock, ChevronDown, Landmark, Percent, EyeOff } from 'lucide-react';
-import type { Remate, BienAdjudicado, FincaInvisible, TerritorioInfo } from '../types';
+import type { Remate, BienAdjudicado, FincaInvisible, TerritorioInfo, PobladoInfo } from '../types';
 
 interface SidebarProps {
   remates: Remate[];
@@ -105,6 +105,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const territorioActual = territorios.find((t) => t.canton === cantonActivo);
   const distritosDisponibles = territorioActual?.distritos || [];
+  const pobladosDisponibles = territorioActual?.poblados || [];
 
   return (
     <aside className="w-96 h-screen bg-slate-950/85 backdrop-blur-xl border-r border-slate-800/80 flex flex-col z-20 shadow-2xl">
@@ -176,11 +177,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onChange={(e) => setDistritoSeleccionado(e.target.value)}
               className="bg-slate-900 border border-slate-700/80 rounded-lg px-2 py-0.5 text-[11px] text-slate-200 focus:outline-none focus:border-amber-400 max-w-[190px] truncate"
             >
-              {distritosDisponibles.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.label}
-                </option>
-              ))}
+              <optgroup label="Distritos Oficiales" className="bg-slate-950 font-bold text-slate-400">
+                {distritosDisponibles.map((d) => (
+                  <option key={d.id} value={d.id} className="bg-slate-900 text-slate-200">
+                    {d.label}
+                  </option>
+                ))}
+              </optgroup>
+              {pobladosDisponibles.length > 0 && (
+                <optgroup label="Caseríos y Sectores" className="bg-slate-950 font-bold text-amber-400">
+                  {pobladosDisponibles.map((p: PobladoInfo) => (
+                    <option key={p.id} value={p.id} className="bg-slate-900 text-slate-200">
+                      {p.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
 
@@ -380,6 +392,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               placeholder="Filtrar por folio, banco o distrito..."
               className="w-full bg-slate-900/60 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-cyan-500 text-slate-200 placeholder-slate-500"
             />
+          </div>
+
+          {/* Subtítulo explicativo del inventario activo */}
+          <div className="flex items-center justify-between px-1 text-[10px] text-slate-400 font-medium">
+            {tabOportunidades === 'remates' && (
+              <span>Inventario guardado en BD ({rematesFiltrados.length} remates)</span>
+            )}
+            {tabOportunidades === 'bancos' && (
+              <span className="text-purple-300">Inventario bancario en BD ({adjudicadosFiltrados.length} propiedades)</span>
+            )}
+            {tabOportunidades === 'invisibles' && (
+              <span className="text-amber-300">Fincas sin polígono en mapa WFS ({invisiblesFiltrados.length})</span>
+            )}
           </div>
 
           {/* CONTENIDO PESTAÑA REMATES */}

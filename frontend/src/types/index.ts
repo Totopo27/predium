@@ -96,12 +96,19 @@ export interface DistritoInfo {
   label: string;
 }
 
+export interface PobladoInfo {
+  id: string;
+  label: string;
+  distrito_padre: string;
+}
+
 export interface TerritorioInfo {
   canton: string;
   provincia: string;
   codigo_canton: string;
   centro_lng_lat: [number, number];
   distritos: DistritoInfo[];
+  poblados?: PobladoInfo[];
   proveedor_activo: boolean;
   descripcion_cobertura: string;
 }

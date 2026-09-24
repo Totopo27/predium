@@ -307,25 +307,89 @@ def buscar_predio(
     else:
         raise HTTPException(status_code=400, detail="Debe indicar 'finca' o 'plano'")
 
-    if not predio:
-        raise HTTPException(status_code=404, detail="Predio no encontrado en catastro")
+    # Si se encuentra en el mapa WFS oficial:
+    if predio:
+        return {
+            "type": "Feature",
+            "properties": {
+                "tipo": "PREDIO_CATASTRADO",
+                "finca": predio.finca,
+                "plano": predio.plano,
+                "distrito": predio.distrito,
+                "area_registro_m2": predio.area_registro_m2,
+                "area_poligono_m2": predio.area_poligono_m2,
+                "frente_m": predio.frente_m,
+                "fondo_m": predio.fondo_m,
+                "construcciones": predio.numero_construcciones,
+                "categoria": predio.categoria,
+                "centroide_x": predio.centroide_x,
+                "centroide_y": predio.centroide_y,
+            },
+            "geometry": predio.geometria,
+        }
+
+    # Si NO está en el mapa WFS: activar Cazador de Fincas Invisibles (Candidata a Saneamiento)
+    num_finca_clean = finca.strip().lstrip("0") if finca else "000000"
+    prov_cod = 2
+    folio_estimado = f"{prov_cod}-{num_finca_clean}-000"
+
+    repo_remates = SqliteRemateRepository()
+    repo_adj = SqliteAdjudicadosRepository()
+    remate_existente = repo_remates.obtener_por_folio_real(folio_estimado)
+    bienes_adj = repo_adj.listar(canton=canton)
+    adj_existente = next((b for b in bienes_adj if num_finca_clean in b.folio_real), None)
+
+    triage_client = LayaTriageClient(usar_modelo_local=False)
+    desc_texto = f"Finca {folio_estimado} en cantón {canton} consultada para saneamiento catastral."
+    if adj_existente:
+        desc_texto += f" Adjudicada por {adj_existente.institucion.value} precio {adj_existente.precio_actual}."
+    elif remate_existente:
+        desc_texto += f" En proceso de cobro judicial por {remate_existente.acreedor} expediente {remate_existente.expediente}."
+
+    triage = triage_client.clasificar_inmueble(
+        texto=desc_texto,
+        precio_actual=adj_existente.precio_actual if adj_existente else (remate_existente.base.monto_base if remate_existente else None),
+        no_georreferenciada_wfs=True,
+    )
+
+    gap_service = GapAnalysisService()
+    vacios_canton = gap_service.ejecutar_analisis_canton(canton=canton or "Zarcero", limite_predios_por_distrito=80)
+    vacio_asociado = None
+    vecinos = []
+    if vacios_canton:
+        v_cand = vacios_canton[0]
+        vacio_asociado = {
+            "id_vacio": v_cand.id_vacio,
+            "distrito": v_cand.distrito,
+            "area_m2": v_cand.area_estimada_m2,
+            "perimetro_m": v_cand.perimetro_m,
+            "colindantes": ", ".join(v_cand.fincas_colindantes[:5]),
+            "colindantes_geometrias": v_cand.geometrias_colindantes[:8],
+            "geometry": v_cand.geometria,
+        }
+        vecinos = v_cand.fincas_colindantes[:5]
 
     return {
         "type": "Feature",
         "properties": {
-            "finca": predio.finca,
-            "plano": predio.plano,
-            "distrito": predio.distrito,
-            "area_registro_m2": predio.area_registro_m2,
-            "area_poligono_m2": predio.area_poligono_m2,
-            "frente_m": predio.frente_m,
-            "fondo_m": predio.fondo_m,
-            "construcciones": predio.numero_construcciones,
-            "categoria": predio.categoria,
-            "centroide_x": predio.centroide_x,
-            "centroide_y": predio.centroide_y,
+            "tipo": "PREDIO_NO_DIGITALIZADO",
+            "finca": num_finca_clean,
+            "folio_real": folio_estimado,
+            "plano": plano or (adj_existente.plano_catastrado if adj_existente else None) or "Sin plano digital",
+            "canton": canton,
+            "distrito": (adj_existente.distrito if adj_existente else None) or "No asignado en WFS",
+            "origen": f"Bancario ({adj_existente.institucion.value})" if adj_existente else ("Cobro Judicial" if remate_existente else "Consulta Directa"),
+            "monto_base": f"{adj_existente.moneda} {adj_existente.precio_actual:,.2f}" if adj_existente else (f"{remate_existente.base.moneda.value} {remate_existente.base.monto_base:,.2f}" if remate_existente else "No registrado en cobro"),
+            "tipo_oportunidad": triage.tipo_oportunidad.value,
+            "viabilidad_saneamiento": triage.viabilidad_saneamiento.value,
+            "detalles_bloqueo": triage.detalles_bloqueo,
+            "score_inversion": triage.score_inversion,
+            "url_publicacion": adj_existente.url_publicacion if adj_existente else None,
+            "vacio_asociado": vacio_asociado,
+            "vecinos_colindantes": vecinos,
+            "detalles": f"Finca con matrícula formal pero sin polígono en el catastro WFS de {canton}. Excelente candidata a saneamiento de linderos.",
         },
-        "geometry": predio.geometria,
+        "geometry": vacio_asociado.get("geometry") if vacio_asociado else None,
     }
 
 
